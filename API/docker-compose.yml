@@ -1,0 +1,44 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ai_story_db_wrapper
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: ai_story_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_wrapper:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: ai_story_redis_wrapper
+    restart: always
+    ports:
+      - "6379:6379"
+
+  web:
+    build:
+      context: ..
+      dockerfile: API/Dockerfile
+    container_name: ai_story_web_wrapper
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/ai_story_db
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../AI_engine:/workspace/AI_engine
+      - .:/workspace/API
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  pgdata_wrapper:

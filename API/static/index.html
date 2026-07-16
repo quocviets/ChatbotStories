@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Story Engine Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <span class="logo-icon">✍️</span>
+                <h1>AI Story Engine <span class="badge">v1.0</span></h1>
+            </div>
+            <div class="system-status">
+                <span class="status-indicator online"></span>
+                <span class="status-text">Connected to Engine</span>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="app-main">
+            <!-- COLUMN 1: Control Panel (Controller Input) -->
+            <section class="panel panel-control">
+                <div class="panel-header">
+                    <h2>⚙️ Cấu hình sinh chương</h2>
+                </div>
+                <div class="panel-content">
+                    <form id="generation-form">
+                        <div class="form-group">
+                            <label for="story-id">Story ID (UUID)</label>
+                            <input type="text" id="story-id" value="3fa85f64-5717-4562-b3fc-2c963f66afa6" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="model-select">Chọn mô hình LLM</label>
+                            <select id="model-select" required>
+                                <option value="" disabled selected>Đang nạp mô hình...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="generation-mode">Chế độ sinh chương</label>
+                            <select id="generation-mode" required>
+                                <option value="ASYNC" selected>Bất đồng bộ (Async Job + SSE Stream)</option>
+                                <option value="SYNC">Đồng bộ (Sync Job - Chờ kết quả)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="chapter-title">Tiêu đề chương</label>
+                            <input type="text" id="chapter-title" placeholder="Ví dụ: Bức thư trong bóng tối" value="Bức thư trong bóng tối" required>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="word-count">Số từ mục tiêu</label>
+                                <input type="number" id="word-count" value="500" min="100" max="8000">
+                            </div>
+                            <div class="form-group">
+                                <label for="tone-select">Giọng văn (Tone)</label>
+                                <select id="tone-select">
+                                    <option value="suspense" selected>Kịch tính, bí ẩn</option>
+                                    <option value="action">Hành động dồn dập</option>
+                                    <option value="emotional">Tình cảm sâu lắng</option>
+                                    <option value="dark">Tăm tối, u uất</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="user-prompt">Yêu cầu nội dung chương truyện</label>
+                            <textarea id="user-prompt" rows="4" placeholder="Minh đột nhập vào thư phòng bí mật để tìm bức thư phản bội..." required>Minh đột nhập vào thư phòng bí mật để tìm bức thư phản bội...</textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="constraints-list">Ràng buộc đặc biệt (Mỗi dòng một dòng)</label>
+                            <textarea id="constraints-list" rows="2" placeholder="Không để nhân vật chính biết danh tính phản diện cuối cùng...">Không được để Minh biết danh tính phản diện cuối cùng&#10;Kết thúc bằng cliffhanger</textarea>
+                        </div>
+
+                        <button type="submit" id="btn-generate" class="btn btn-primary">
+                            <span>✨ Sinh Chương Truyện</span>
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- COLUMN 2: Editor & Real-Time Stream (View Outputs) -->
+            <section class="panel panel-editor">
+                <div class="panel-header">
+                    <h2>📝 Bản nháp chương truyện</h2>
+                    <div id="job-progress-container" class="job-progress-wrapper hidden">
+                        <span id="job-step" class="job-step-text">Đang chuẩn bị...</span>
+                        <div class="progress-bar-container" style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                            <div class="progress-bar" style="flex-grow: 1;">
+                                <div id="job-progress-fill" class="progress-fill" style="width: 0%;"></div>
+                            </div>
+                            <button type="button" id="btn-cancel-job" class="btn" style="padding: 4px 8px; font-size: 12px; background: var(--color-error); color: white; border: none; border-radius: 4px; cursor: pointer;">Hủy</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div class="editor-container">
+                        <div id="stream-output" class="stream-box" contenteditable="true" placeholder="Nội dung chương truyện sinh bởi AI sẽ hiển thị hoặc viết tại đây..."></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- COLUMN 3: Quality Check & Memory Updates -->
+            <section class="panel panel-sidebar">
+                <!-- Quality Analysis Section -->
+                <div class="sub-panel panel-analysis">
+                    <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <h2>🔍 Đánh giá chất lượng (Analyzer)</h2>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" id="btn-analyze" class="btn" style="padding: 4px 8px; font-size: 11px; background: #0ea5e9; color: white; border: none; border-radius: 4px; cursor: pointer;">🔍 Đánh giá lại</button>
+                            <div id="quality-score" class="score-badge hidden">90</div>
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <div id="analysis-idle" class="info-placeholder">
+                            Chưa có bản nháp để phân tích. Hãy nhấn sinh chương truyện.
+                        </div>
+                        <div id="analysis-results" class="analysis-box hidden">
+                            <div class="status-summary">
+                                <span class="label">Trạng thái:</span>
+                                <span id="analysis-status-badge" class="badge-status">Passed</span>
+                            </div>
+                            <div id="issues-list" class="issues-container">
+                                <!-- Issue items render here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Long-Term Memory Section -->
+                <div class="sub-panel panel-memory">
+                    <div class="panel-header">
+                        <h2>🧠 Ký ức được lưu trữ (Memory)</h2>
+                    </div>
+                    <div class="panel-content">
+                        <div id="memory-idle" class="info-placeholder">
+                            Chương truyện chưa được duyệt. Phê duyệt để lưu trữ ký ức dài hạn.
+                        </div>
+                        <div id="memory-results" class="memory-box hidden">
+                            <div class="memory-section">
+                                <h3>📌 Tóm tắt chương mới:</h3>
+                                <p id="mem-summary">...</p>
+                            </div>
+                            <div class="memory-section">
+                                <h3>🔹 Sự kiện trích xuất:</h3>
+                                <ul id="mem-facts">
+                                    <!-- Facts render here -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Controls Section -->
+                <div id="action-panel" class="action-panel hidden">
+                    <div class="form-group">
+                        <label for="feedback-input">Ý kiến phản hồi / Yêu cầu sửa đổi / Yêu cầu viết tiếp</label>
+                        <textarea id="feedback-input" rows="2" placeholder="Ví dụ: Viết tiếp bằng việc đột nhập thư phòng... hoặc Viết lại đoạn cuối kịch tính hơn..."></textarea>
+                    </div>
+                    <div class="action-buttons" style="display: flex; gap: 8px;">
+                        <button id="btn-approve" class="btn btn-success" style="flex: 1;">✅ Duyệt & Lưu ký ức</button>
+                        <button id="btn-regenerate" class="btn btn-warning" style="flex: 1;">🔄 Tái tạo</button>
+                        <button id="btn-continue" class="btn" style="flex: 1; background: #6366f1; color: white;">✍️ Viết tiếp</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MVC Frontend Scripts -->
+    <script src="/static/storyRepository.js"></script>
+    <script src="/static/storyService.js"></script>
+    <script src="/static/storyController.js"></script>
+    <script>
+        // Entry point: Initialize the MVC app when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            const repository = new StoryRepository();
+            const service = new StoryService(repository);
+            const controller = new StoryController(service);
+            controller.init();
+        });
+    </script>
+</body>
+</html>
