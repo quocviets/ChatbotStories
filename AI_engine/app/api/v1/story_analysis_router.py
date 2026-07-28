@@ -1,23 +1,13 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
-from app.application.dto.story_dtos import FeedbackRequest, GenerateChapterRequest
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api.v1.responses import api_response
+from app.application.dto.story_dtos import ChapterOptions, FeedbackRequest, GenerationConfig
 from app.application.commands.story_commands import GenerateChapterCommand
-from app.infrastructure.db.postgres_client import get_chapter_version, save_chapter_version, get_chapter_version_by_id
+from app.infrastructure.db.postgres_client import update_chapter_version, resolve_chapter_version as resolve_chapter_version_helper
 from app.infrastructure.llm.llm_gateway import LLMGateway
+from app.infrastructure.vector_store.pgvector_store import search_memories_vector
 from app.pipeline.analyzer import StoryAnalyzer
 from app.pipeline.retriever import StoryRetriever
-
-async def resolve_chapter_version_helper(chapter_id: str, version_id_or_num: str) -> dict | None:
-    try:
-        UUID(version_id_or_num)
-        version = await get_chapter_version_by_id(version_id_or_num)
-        if version:
-            return version
-    except ValueError:
-        pass
-
-    version_num = int(version_id_or_num) if version_id_or_num.isdigit() else 1
-    return await get_chapter_version(chapter_id, version_num)
 
 router = APIRouter(prefix="/stories", tags=["Story Analysis"])
 
@@ -45,8 +35,6 @@ async def analyze_chapter(
     chapter_ver = await resolve_chapter_version_helper(str(chapter_id), body.version_id)
     if not chapter_ver:
         raise HTTPException(status_code=404, detail="Chapter version not found")
-    version_num = chapter_ver["version_number"]
-        
     dummy_plan = {
         "chapter_goal": "Kiểm tra độc lập",
         "chapter_type": "analysis",
@@ -59,28 +47,41 @@ async def analyze_chapter(
     command = GenerateChapterCommand(
         story_id=str(story_id), tenant_id="system", user_id="system", idempotency_key="system",
         request="analyze", model="gpt-writing", mode="SYNC", 
-        chapter=GenerateChapterRequest(request="a", model="g").chapter,
-        generation_config=GenerateChapterRequest(request="a", model="g").generation_config,
+        chapter=ChapterOptions(),
+        generation_config=GenerationConfig(),
         constraints=[], metadata={}
     )
     
     context = await retriever.retrieve(str(story_id), command, dummy_plan)
     analysis = await analyzer.analyze(str(story_id), chapter_ver["content"], dummy_plan, context)
     
-    await save_chapter_version(
-        chapter_id=str(chapter_id),
-        version_number=version_num,
-        content=chapter_ver["content"],
-        status=chapter_ver["status"],
-        model_alias=chapter_ver["model_alias"],
-        prompt_template_version=chapter_ver["prompt_template_version"],
-        generation_metadata=chapter_ver["generation_metadata"],
+    await update_chapter_version(
+        str(chapter_id),
+        chapter_ver,
         analysis_result=analysis.model_dump(),
-        created_by=chapter_ver["created_by"]
+        user_feedback=None
     )
     
-    return {
-        "code": 200,
-        "message": "Chapter analyzed successfully",
-        "data": analysis.model_dump()
-    }
+    return api_response(200, "Chapter analyzed successfully", data=analysis.model_dump())
+
+
+@router.get("/{story_id}/lore/search", status_code=status.HTTP_200_OK)
+async def search_story_lore(
+    story_id: UUID,
+    query: str = Query(..., min_length=2, max_length=500),
+    limit: int = Query(8, ge=1, le=20),
+    gateway=Depends(get_gateway)
+):
+    embedding = await gateway.get_embeddings(query)
+    memories = await search_memories_vector(str(story_id), embedding, limit)
+    results = [
+        {
+            "id": str(memory["id"]),
+            "chapter_id": str(memory["chapter_id"]) if memory["chapter_id"] else None,
+            "type": memory["memory_type"],
+            "content": memory["content"],
+            "similarity": float(memory["similarity"]) if memory.get("similarity") is not None else None
+        }
+        for memory in memories
+    ]
+    return api_response(200, "Lore search completed", data=results)

@@ -1,11 +1,8 @@
 import json
-import logging
 from app.application.dto.story_dtos import LLMRequest
 from app.config import ROUTING_CONFIG
 from app.infrastructure.llm.llm_gateway import LLMGateway
 from app.infrastructure.vector_store.pgvector_store import save_memory_vector
-
-logger = logging.getLogger(__name__)
 
 class MemoryManager:
     def __init__(self, gateway: LLMGateway):
@@ -32,10 +29,10 @@ class MemoryManager:
             "    \"Thay đổi chỉ số/trạng thái nhân vật (ví dụ: Minh mất lòng tin vào thầy)\"\n"
             "  ]\n"
             "}"
-        )
+        )   
         
         request = LLMRequest(
-            model=ROUTING_CONFIG["summarizer"],
+            model=ROUTING_CONFIG["summarizer"], 
             system_prompt=system_prompt,
             messages=[{"role": "user", "content": prompt}],
             response_format="json_object",
@@ -58,39 +55,20 @@ class MemoryManager:
         new_facts = data.get("new_facts", [])
         character_updates = data.get("character_updates", [])
         
-        # 1. Save chapter summary memory
-        summary_emb = await self.gateway.get_embeddings(summary)
-        await save_memory_vector(
-            story_id=story_id,
-            chapter_id=chapter_id,
-            memory_type="SUMMARY",
-            content=summary,
-            metadata={"version_number": version_number},
-            embedding=summary_emb
-        )
-        
-        # 2. Save facts
-        for fact in new_facts:
-            fact_emb = await self.gateway.get_embeddings(fact)
-            await save_memory_vector(
-                story_id=story_id,
-                chapter_id=chapter_id,
-                memory_type="NEW_FACT",
-                content=fact,
-                metadata={"version_number": version_number},
-                embedding=fact_emb
-            )
-            
-        # 3. Save character updates
-        for cu in character_updates:
-            cu_emb = await self.gateway.get_embeddings(cu)
-            await save_memory_vector(
-                story_id=story_id,
-                chapter_id=chapter_id,
-                memory_type="CHARACTER_STATE",
-                content=cu,
-                metadata={"version_number": version_number},
-                embedding=cu_emb
-            )
+        for memory_type, contents in (
+            ("SUMMARY", (summary,)),
+            ("NEW_FACT", new_facts),
+            ("CHARACTER_STATE", character_updates)
+        ):
+            for content in contents:
+                embedding = await self.gateway.get_embeddings(content)
+                await save_memory_vector(
+                    story_id=story_id,
+                    chapter_id=chapter_id,
+                    memory_type=memory_type,
+                    content=content,
+                    metadata={"version_number": version_number},
+                    embedding=embedding
+                )
             
         return data

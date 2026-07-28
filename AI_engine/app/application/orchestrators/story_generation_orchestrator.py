@@ -1,21 +1,22 @@
 import logging
 import json
 import traceback
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
-from typing import Optional, Any
 
 from app.application.commands.story_commands import GenerateChapterCommand
-from app.application.dto.story_dtos import AnalysisResult, LLMRequest
-from app.infrastructure.db.postgres_client import update_job, save_chapter_version
+from app.application.dto.story_dtos import LLMRequest
+from app.infrastructure.db.postgres_client import (
+    get_job, get_recent_chapters_content, save_chapter_version, update_job
+)
 from app.infrastructure.redis.redis_client import get_redis
 from app.infrastructure.llm.llm_gateway import LLMGateway
+from app.infrastructure.vector_store.pgvector_store import search_memories_vector
 from app.pipeline.planner import StoryPlanner
 from app.pipeline.retriever import StoryRetriever
 from app.pipeline.prompt_builder import PromptBuilder
-from app.pipeline.writer import StoryWriter
 from app.pipeline.analyzer import StoryAnalyzer
-from app.pipeline.issue_classifier import IssueClassifier
+from app.pipeline.issue_classifier import classify_primary_issue
 
 logger = logging.getLogger(__name__)
 
@@ -38,35 +39,43 @@ class StoryGenerationOrchestrator:
         planner: StoryPlanner,
         retriever: StoryRetriever,
         prompt_builder: PromptBuilder,
-        writer: StoryWriter,
-        analyzer: StoryAnalyzer,
-        issue_classifier: IssueClassifier
+        gateway: LLMGateway,
+        analyzer: StoryAnalyzer
     ):
         self.planner = planner
         self.retriever = retriever
         self.prompt_builder = prompt_builder
-        self.writer = writer
+        self.gateway = gateway
         self.analyzer = analyzer
-        self.issue_classifier = issue_classifier
+
+    async def _transition_job(self, job_id: str, status: str, current_step: str, progress: int, **updates):
+        job = await update_job(
+            job_id=job_id,
+            status=status,
+            current_step=current_step,
+            progress=progress,
+            **updates
+        )
+        if not job:
+            return False
+        await publish_redis_stream(job_id, "status", {"status": status, "progress": progress})
+        return True
 
     async def execute(self, command: GenerateChapterCommand, job_id: str) -> dict:
         logger.info(f"Orchestrator started job {job_id} for story {command.story_id}")
         
         # 1. Update status to PLANNING
-        await update_job(
-            job_id=job_id,
-            status="PLANNING",
-            current_step="PLANNER",
-            progress=10,
-            started_at=datetime.utcnow()
-        )
-        await publish_redis_stream(job_id, "status", {"status": "PLANNING", "progress": 10})
+        if not await self._transition_job(
+            job_id, "PLANNING", "PLANNER", 10,
+            started_at=datetime.now(UTC)
+        ):
+            return {"status": "CANCELLED"}
 
         # Step 1: PLANNER
         try:
-            recent_chapters = await get_recent_chapters_content_from_db(command.story_id)
+            recent_chapters = await get_recent_chapters_content(command.story_id, limit=3)
             query_vector = await self.retriever.gateway.get_embeddings(command.request)
-            relevant_memories = await search_memories_from_vector(command.story_id, query_vector)
+            relevant_memories = await search_memories_vector(command.story_id, query_vector, limit=5)
             
             plan = await self.planner.create_plan(command, recent_chapters, relevant_memories)
             logger.info(f"Planner complete for job {job_id}")
@@ -77,8 +86,8 @@ class StoryGenerationOrchestrator:
             return {"status": "FAILED", "error": error_msg}
 
         # 2. Update status to RETRIEVING
-        await update_job(job_id=job_id, status="RETRIEVING", current_step="RETRIEVER", progress=30)
-        await publish_redis_stream(job_id, "status", {"status": "RETRIEVING", "progress": 30})
+        if not await self._transition_job(job_id, "RETRIEVING", "RETRIEVER", 30):
+            return {"status": "CANCELLED"}
 
         # Step 2: RETRIEVER
         try:
@@ -105,14 +114,11 @@ class StoryGenerationOrchestrator:
                 return {"status": "CANCELLED"}
 
             # 3. Update status to BUILDING_PROMPT
-            await update_job(
-                job_id=job_id,
-                status="BUILDING_PROMPT",
-                current_step="PROMPT_BUILDER",
-                progress=40,
+            if not await self._transition_job(
+                job_id, "BUILDING_PROMPT", "PROMPT_BUILDER", 40,
                 attempt=attempts
-            )
-            await publish_redis_stream(job_id, "status", {"status": "BUILDING_PROMPT", "progress": 40})
+            ):
+                return {"status": "CANCELLED"}
 
             # Step 3: PROMPT BUILDER
             system_prompt, user_instruct = await self.prompt_builder.build(
@@ -123,8 +129,8 @@ class StoryGenerationOrchestrator:
             )
 
             # 4. Update status to GENERATING
-            await update_job(job_id=job_id, status="GENERATING", current_step="LLM_WRITER", progress=50)
-            await publish_redis_stream(job_id, "status", {"status": "GENERATING", "progress": 50})
+            if not await self._transition_job(job_id, "GENERATING", "LLM_WRITER", 50):
+                return {"status": "CANCELLED"}
 
             # Step 4: GENERATE CHAPTER
             async def stream_handler(chunk: str):
@@ -140,7 +146,7 @@ class StoryGenerationOrchestrator:
             )
 
             try:
-                llm_response = await self.writer.write_draft(command.model, llm_request, stream_handler=stream_handler)
+                llm_response = await self.gateway.generate(command.model, llm_request, stream_handler=stream_handler)
                 draft_content = llm_response.content
                 logger.info(f"Writer complete for job {job_id}, attempt {attempts}")
             except Exception as e:
@@ -149,64 +155,40 @@ class StoryGenerationOrchestrator:
                 await self._fail_job(job_id, error_msg)
                 return {"status": "FAILED", "error": error_msg}
 
-            # If auto_analyze is false, bypass Analyzer
-            if not command.generation_config.auto_analyze:
-                version_row = await save_chapter_version(
-                    chapter_id=chapter_id,
-                    version_number=attempts + 1,
-                    content=draft_content,
-                    status="READY_FOR_REVIEW",
-                    model_alias=command.model,
-                    prompt_template_version="chapter-writer-v1.0",
-                    generation_metadata={
-                        "provider": llm_response.provider,
-                        "model": llm_response.model,
-                        "latency_ms": llm_response.latency_ms,
-                        "usage": llm_response.usage.model_dump()
-                    },
-                    created_by=command.user_id
-                )
-                result = {
-                    "chapter_id": chapter_id,
-                    "version_id": str(version_row["id"]),
-                    "status": "READY_FOR_REVIEW",
-                    "title": command.chapter.title or "Bản nháp sinh bởi AI",
-                    "content": draft_content,
-                    "analysis": None
-                }
-                await update_job(
-                    job_id=job_id,
-                    status="COMPLETED",
-                    current_step=None,
-                    progress=100,
-                    chapter_id=chapter_id,
-                    result_payload=result,
-                    completed_at=datetime.utcnow()
-                )
-                await publish_redis_stream(job_id, "completed", result)
-                return result
+            if await self._check_job_cancelled(job_id) == "CANCELLED":
+                return {"status": "CANCELLED"}
 
-            # 5. Update status to ANALYZING
-            await update_job(job_id=job_id, status="ANALYZING", current_step="STORY_ANALYZER", progress=80)
-            await publish_redis_stream(job_id, "status", {"status": "ANALYZING", "progress": 80})
+            analysis = None
+            analysis_result = None
+            if command.generation_config.auto_analyze:
+                # 5. Update status to ANALYZING
+                if not await self._transition_job(job_id, "ANALYZING", "STORY_ANALYZER", 80):
+                    return {"status": "CANCELLED"}
 
-            # Step 5: ANALYZER
-            try:
-                analysis = await self.analyzer.analyze(command.story_id, draft_content, plan, context, attempt=attempts)
-                await publish_redis_stream(job_id, "analysis", analysis.model_dump())
-                logger.info(f"Analyzer complete for job {job_id}, score {analysis.score}")
-            except Exception as e:
-                error_msg = f"Error during analysis phase: {e}"
-                logger.error(f"{error_msg}\n{traceback.format_exc()}")
-                await self._fail_job(job_id, error_msg)
-                return {"status": "FAILED", "error": error_msg}
+                # Step 5: ANALYZER
+                try:
+                    analysis = await self.analyzer.analyze(
+                        command.story_id, draft_content, plan, context, attempt=attempts
+                    )
+                    analysis_result = analysis.model_dump()
+                    await publish_redis_stream(job_id, "analysis", analysis_result)
+                    logger.info(f"Analyzer complete for job {job_id}, score {analysis.score}")
+                except Exception as e:
+                    error_msg = f"Error during analysis phase: {e}"
+                    logger.error(f"{error_msg}\n{traceback.format_exc()}")
+                    await self._fail_job(job_id, error_msg)
+                    return {"status": "FAILED", "error": error_msg}
+
+                if await self._check_job_cancelled(job_id) == "CANCELLED":
+                    return {"status": "CANCELLED"}
 
             # Save draft
+            version_status = "READY_FOR_REVIEW" if analysis is None or analysis.passed else "DRAFT"
             version_row = await save_chapter_version(
                 chapter_id=chapter_id,
                 version_number=attempts + 1,
                 content=draft_content,
-                status="READY_FOR_REVIEW" if analysis.passed else "DRAFT",
+                status=version_status,
                 model_alias=command.model,
                 prompt_template_version="chapter-writer-v1.0",
                 generation_metadata={
@@ -215,18 +197,18 @@ class StoryGenerationOrchestrator:
                     "latency_ms": llm_response.latency_ms,
                     "usage": llm_response.usage.model_dump()
                 },
-                analysis_result=analysis.model_dump(),
+                analysis_result=analysis_result,
                 created_by=command.user_id
             )
 
-            if analysis.passed:
+            if version_status == "READY_FOR_REVIEW":
                 result = {
                     "chapter_id": chapter_id,
                     "version_id": str(version_row["id"]),
                     "status": "READY_FOR_REVIEW",
                     "title": command.chapter.title or "Bản nháp sinh bởi AI",
                     "content": draft_content,
-                    "analysis": analysis.model_dump()
+                    "analysis": analysis_result
                 }
                 await update_job(
                     job_id=job_id,
@@ -235,7 +217,7 @@ class StoryGenerationOrchestrator:
                     progress=100,
                     chapter_id=chapter_id,
                     result_payload=result,
-                    completed_at=datetime.utcnow()
+                    completed_at=datetime.now(UTC)
                 )
                 await publish_redis_stream(job_id, "completed", result)
                 return result
@@ -245,7 +227,7 @@ class StoryGenerationOrchestrator:
             last_analysis = analysis
             
             if attempts <= max_attempts:
-                issue_type = self.issue_classifier.classify_primary_issue(analysis)
+                issue_type = classify_primary_issue(analysis)
                 if issue_type == "CONTEXT_ISSUE":
                     logger.info(f"Context issue identified, fetching more context...")
                     context = await self.retriever.retrieve_more(command.story_id, analysis.issues)
@@ -271,7 +253,7 @@ class StoryGenerationOrchestrator:
             progress=100,
             chapter_id=chapter_id,
             result_payload=result,
-            completed_at=datetime.utcnow()
+            completed_at=datetime.now(UTC)
         )
         await publish_redis_stream(job_id, "completed", result)
         return result
@@ -283,23 +265,22 @@ class StoryGenerationOrchestrator:
             current_step=None,
             progress=100,
             error_payload={"message": error_message},
-            completed_at=datetime.utcnow()
+            completed_at=datetime.now(UTC)
         )
         await publish_redis_stream(job_id, "status", {"status": "FAILED", "error": error_message})
 
     async def _check_job_cancelled(self, job_id: str) -> str:
-        job = await update_job(job_id=job_id, status="GENERATING") # Fetch current state
+        job = await get_job(job_id)
         if job:
             return job.get("status")
         return "GENERATING"
 
 
-# --- Imports helper to bypass circular dependencies ---
-async def get_recent_chapters_content_from_db(story_id: str) -> list[dict]:
-    from app.infrastructure.db.postgres_client import get_recent_chapters_content
-    return await get_recent_chapters_content(story_id, limit=3)
-
-
-async def search_memories_from_vector(story_id: str, query_embedding: list[float]) -> list[dict]:
-    from app.infrastructure.vector_store.pgvector_store import search_memories_vector
-    return await search_memories_vector(story_id, query_embedding, limit=5)
+def build_orchestrator(gateway: LLMGateway) -> StoryGenerationOrchestrator:
+    return StoryGenerationOrchestrator(
+        planner=StoryPlanner(gateway),
+        retriever=StoryRetriever(gateway),
+        prompt_builder=PromptBuilder(),
+        gateway=gateway,
+        analyzer=StoryAnalyzer(gateway)
+    )

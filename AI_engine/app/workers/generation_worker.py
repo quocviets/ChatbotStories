@@ -1,19 +1,13 @@
 import asyncio
-import json
 import logging
 import traceback
+from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 from app.application.commands.story_commands import GenerateChapterCommand
 from app.application.dto.story_dtos import ChapterOptions, GenerationConfig
-from app.infrastructure.db.postgres_client import get_job, update_job
+from app.infrastructure.db.postgres_client import get_job
 from app.infrastructure.redis.redis_client import get_redis
 from app.infrastructure.llm.llm_gateway import LLMGateway
-from app.pipeline.planner import StoryPlanner
-from app.pipeline.retriever import StoryRetriever
-from app.pipeline.prompt_builder import PromptBuilder
-from app.pipeline.writer import StoryWriter
-from app.pipeline.analyzer import StoryAnalyzer
-from app.pipeline.issue_classifier import IssueClassifier
-from app.application.orchestrators.story_generation_orchestrator import StoryGenerationOrchestrator
+from app.application.orchestrators.story_generation_orchestrator import StoryGenerationOrchestrator, build_orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +22,7 @@ async def submit_job_to_queue(job_id: str):
 async def worker_loop():
     """Background worker processing jobs from the queue."""
     logger.info("Generation background worker started.")
-    gateway = LLMGateway()
-    
-    orchestrator = StoryGenerationOrchestrator(
-        planner=StoryPlanner(gateway),
-        retriever=StoryRetriever(gateway),
-        prompt_builder=PromptBuilder(),
-        writer=StoryWriter(gateway),
-        analyzer=StoryAnalyzer(gateway),
-        issue_classifier=IssueClassifier()
-    )
+    orchestrator = build_orchestrator(LLMGateway())
 
     redis = get_redis()
     while True:
@@ -49,6 +34,9 @@ async def worker_loop():
         except asyncio.CancelledError:
             logger.info("Background worker stopped.")
             break
+        except (RedisTimeoutError, RedisConnectionError) as e:
+            logger.warning("Redis queue temporarily unavailable; retrying: %s", e)
+            await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"Error in worker loop: {e}\n{traceback.format_exc()}")
             await asyncio.sleep(1)

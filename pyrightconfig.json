@@ -1,0 +1,6 @@
+{
+  "extraPaths": [
+    "./AI_engine",
+    "./API"
+  ]
+}

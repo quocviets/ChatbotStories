@@ -1,20 +1,52 @@
-import logging
 from typing import Optional
 from app.application.commands.story_commands import GenerateChapterCommand
 from app.application.dto.story_dtos import AnalysisResult
-
-logger = logging.getLogger(__name__)
 
 class PromptBuilder:
     async def build(self, command: GenerateChapterCommand, plan: dict, context: dict, 
                     previous_analysis: Optional[AnalysisResult] = None, 
                     preserve_feedback: Optional[str] = None) -> tuple[str, str]:
+
+        # Determine active tone (Two-Tier Tone Hierarchy: Chapter Override > Master Tone > Plan Default)
+        chapter_override = getattr(command.chapter, "chapter_tone_override", None)
+        master_tone = getattr(command.chapter, "master_tone", None)
         
+        if chapter_override and chapter_override.strip():
+            active_tone = f"GHI ĐÈ THEO CHƯƠNG: {chapter_override.strip()}"
+        elif master_tone and master_tone.strip():
+            active_tone = f"MẶC ĐỊNH BỘ TRUYỆN: {master_tone.strip()}"
+        else:
+            active_tone = plan.get("tone", "Thô mộc, tự nhiên, bộc trực")
+
         system_prompt = (
-            "Bạn là tác giả chuyên viết tiểu thuyết mạng dài tập, có khả năng viết lôi cuốn, "
-            "giọng văn mượt mà và duy trì tính nhất quán tuyệt đối về nhân vật, bối cảnh."
+            "Bạn là tác giả chuyên viết tiểu thuyết mạng dài tập tài ba. "
+            "QUY TẮC NGUYÊN TẮC VÀNG VỀ GIỌNG VĂN (ANTI-AI CLICHÉS):\n"
+            "- Viết văn xuôi chân thực, thô mộc, dứt khoát và tự nhiên như ngôn ngữ đời thực.\n"
+            "- Tuyệt đối CẤM các câu từ hoa mỹ sến sẩm rập khuôn AI (như 'ánh mắt đong đầy xúc cảm', "
+            "'khoảnh khắc ấy không gian như ngưng đọng', 'cuộc hành trình đầy hiểm nguy', 'chặng đường phía trước').\n"
+            "- Thoại nhân vật bộc trực, thực tế, đúng tâm lý sinh tồn."
         )
         
+        # Condensed / Master Outline
+        outline_text = ""
+        condensed_outline = getattr(command.chapter, "condensed_outline", None) or getattr(command.chapter, "master_outline", None)
+        if condensed_outline and condensed_outline.strip():
+            outline_text = f"\n[BẢN ĐỒ CỐT TRUYỆN & ĐỀ CƯƠNG TỔNG QUÁT]\n{condensed_outline.strip()}\n"
+
+        # Dynamic Character Wiki Status Check
+        char_wiki_text = ""
+        character_wiki = getattr(command.chapter, "character_wiki", None)
+        if character_wiki and isinstance(character_wiki, dict):
+            char_wiki_text = "\n[TRẠNG THÁI THẺ NHÂN VẬT (CHARACTER WIKI)]\n"
+            for name, info in character_wiki.items():
+                status = info.get("status", "Đang sống") if isinstance(info, dict) else "Đang sống"
+                role = info.get("role", "") if isinstance(info, dict) else ""
+                char_wiki_text += f"- {name} ({role}): Trạng thái = [{status}]. "
+                if "Đã chết" in status or "Hy sinh" in status:
+                    char_wiki_text += "CHỈ ĐƯỢC PHÉP xuất hiện qua lời kể, hồi tưởng (flashback), tuyệt đối CẤM cho xuất hiện nói chuyện trực tiếp!\n"
+                else:
+                    char_wiki_text += "\n"
+
         recent_chapters_text = ""
         for idx, rc in enumerate(context.get("recent_chapters", [])):
             recent_chapters_text += f"\n--- Chương trước (Bản {rc['version_number']}) ---\n{rc['content']}\n"
@@ -29,15 +61,18 @@ class PromptBuilder:
             
         user_instruct = (
             f"Hãy viết chương truyện tiếp theo dựa trên kế hoạch và thông tin sau:\n\n"
+            f"[PHONG CÁCH & GIỌNG VĂN CỐ ĐỊNH]\n"
+            f"- Giọng văn áp dụng: {active_tone}\n"
+            f"{outline_text}"
+            f"{char_wiki_text}\n"
             f"[KẾ HOẠCH CHƯƠNG]\n"
             f"- Mục tiêu chính: {plan.get('chapter_goal')}\n"
             f"- Loại chương: {plan.get('chapter_type')}\n"
             f"- Ngôi kể (POV): {plan.get('pov_character')}\n"
-            f"- Giọng văn/Tone: {plan.get('tone')}\n"
             f"- Phân cảnh chi tiết:\n{scenes_plan}\n"
             f"- Ràng buộc liên tục: {', '.join(plan.get('continuity_constraints', []))}\n"
-            f"- Cliffhanger: {plan.get('ending_hook')}\n\n"
-            f"[KÝ ỨC & BỒI CẢNH LIÊN QUAN]\n"
+            f"- Điểm dừng Cliffhanger: {plan.get('ending_hook')}\n\n"
+            f"[KÝ ỨC & BỐI CẢNH LIÊN QUAN]\n"
             f"{memories_text}\n"
             f"[CHƯƠNG GẦN ĐÂY]\n"
             f"{recent_chapters_text}\n"

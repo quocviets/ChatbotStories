@@ -3,7 +3,7 @@ import httpx
 import time
 import logging
 from typing import AsyncIterator
-from app.application.dto.story_dtos import LLMRequest, LLMResponse, LLMUsage
+from app.application.dto.story_dtos import LLMRequest, LLMResponse
 
 logger = logging.getLogger(__name__)
 

@@ -24,12 +24,18 @@ class StoryPlanner:
             
         memory_context = "\n".join([f"- Ký ức: {m['content']} (Loại: {m['memory_type']})" for m in relevant_memories])
             
+        outline_info = ""
+        master_outline = getattr(command.chapter, "condensed_outline", None) or getattr(command.chapter, "master_outline", None)
+        if master_outline and master_outline.strip():
+            outline_info = f"Đề cương Cốt truyện Tổng quát:\n{master_outline.strip()[:2500]}\n\n"
+
         prompt = (
             f"Yêu cầu của người dùng: {command.request}\n\n"
             f"Thông tin bổ sung về chương cần sinh:\n"
             f"- Tiêu đề dự kiến: {command.chapter.title or 'Không có'}\n"
             f"- Độ dài kỳ vọng: {command.chapter.target_word_count} từ\n"
             f"- Giọng văn: {command.chapter.tone or 'Mặc định'}\n\n"
+            f"{outline_info}"
             f"Bối cảnh truyện gần đây:\n{recent_context}\n"
             f"Ký ức liên quan từ Story Bible:\n{memory_context}\n\n"
             f"Các ràng buộc bổ sung: {command.constraints}\n\n"

@@ -1,12 +1,9 @@
 import json
 import httpx
 import time
-import logging
 from typing import AsyncIterator
 from app.application.dto.story_dtos import LLMRequest, LLMResponse, LLMUsage
 from app.config import OPENAI_API_KEY
-
-logger = logging.getLogger(__name__)
 
 class OpenAIProvider:
     def __init__(self, model_name: str):

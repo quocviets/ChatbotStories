@@ -1,9 +1,6 @@
 import json
-import logging
 from uuid import uuid4, UUID
 from app.infrastructure.db.postgres_client import get_db_pool
-
-logger = logging.getLogger(__name__)
 
 async def save_memory_vector(story_id: str, chapter_id: str | None, memory_type: str, 
                                content: str, metadata: dict | None = None, 

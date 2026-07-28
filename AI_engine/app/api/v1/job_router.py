@@ -2,10 +2,11 @@ import json
 import logging
 import asyncio
 from uuid import UUID
-from datetime import datetime
+from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from app.api.v1.responses import api_response
 from app.infrastructure.db.postgres_client import get_job, update_job
 from app.infrastructure.redis.redis_client import get_redis
 
@@ -23,10 +24,10 @@ async def get_job_status(job_id: UUID):
             detail=f"Job {job_id} not found."
         )
         
-    return {
-        "code": 200,
-        "message": "Job retrieved successfully",
-        "data": {
+    return api_response(
+        200,
+        "Job retrieved successfully",
+        data={
             "job_id": str(job["id"]),
             "story_id": str(job["story_id"]),
             "chapter_id": str(job["chapter_id"]) if job["chapter_id"] else None,
@@ -36,9 +37,9 @@ async def get_job_status(job_id: UUID):
             "attempt": job["attempt"],
             "max_attempts": job["max_attempts"],
             "result": job.get("result_payload"),
-            "error": job.get("error_payload")
+            "error": job.get("error_payload") 
         }
-    }
+    )
 
 
 @router.post("/{job_id}/cancel", status_code=status.HTTP_200_OK)
@@ -53,34 +54,43 @@ async def cancel_job(job_id: UUID):
             detail=f"Job {job_id} is already in a terminal state: {job['status']}"
         )
 
-    await update_job(job_id=str(job_id), status="CANCELLED", completed_at=datetime.utcnow())
+    cancelled = await update_job(
+        job_id=str(job_id), status="CANCELLED", progress=100, completed_at=datetime.now(UTC)
+    )
+    if not cancelled:
+        raise HTTPException(status_code=409, detail="Job changed state before cancellation completed")
     logger.info(f"Cancellation request recorded for job {job_id}.")
     
-    return {
-        "code": 200,
-        "message": "Job cancellation request recorded."
-    }
+    return api_response(200, "Job cancellation request recorded.")
 
 
 @router.get("/{job_id}/stream")
-async def stream_job(job_id: str):
+async def stream_job(job_id: UUID):
     """
     Subscribes to Redis Pub/Sub to listen to events for the specified job_id 
     and streams them to the client as Server-Sent Events.
     """
-    async def event_generator():
-        # 1. Send the current state of the job first
-        job = await get_job(job_id)
-        if job:
-            yield f"event: status\ndata: {json.dumps({'status': job['status'], 'progress': job['progress']}, ensure_ascii=False)}\n\n"
+    job = await get_job(str(job_id))
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
 
-        # 2. Connect and subscribe to Redis PubSub
+    async def event_generator():
+        pubsub = None
+        channel = f"ai:job:{job_id}:stream"
         try:
-            redis = get_redis()
-            pubsub = redis.pubsub()
-            channel = f"ai:job:{job_id}:stream"
-            await pubsub.subscribe(channel)
-            logger.info(f"SSE Client subscribed to Redis channel: {channel}")
+            current_job = job
+            if current_job["status"] not in ("COMPLETED", "FAILED", "CANCELLED", "NEEDS_MANUAL_REVIEW"):
+                pubsub = get_redis().pubsub()
+                await pubsub.subscribe(channel)
+                logger.info(f"SSE Client subscribed to Redis channel: {channel}")
+                current_job = await get_job(str(job_id)) or current_job
+
+            yield f"event: status\ndata: {json.dumps({'status': current_job['status'], 'progress': current_job['progress']}, ensure_ascii=False)}\n\n"
+            if current_job["status"] in ("COMPLETED", "NEEDS_MANUAL_REVIEW"):
+                yield f"event: completed\ndata: {json.dumps(current_job.get('result_payload') or {}, ensure_ascii=False)}\n\n"
+                return
+            if current_job["status"] in ("FAILED", "CANCELLED"):
+                return
             
             async for message in pubsub.listen():
                 if message["type"] == "message":
@@ -98,10 +108,11 @@ async def stream_job(job_id: str):
         except Exception as e:
             logger.error(f"SSE connection error for job {job_id}: {e}")
         finally:
-            try:
-                await pubsub.unsubscribe(channel)
-                await pubsub.close()
-            except Exception:
-                pass
+            if pubsub:
+                try:
+                    await pubsub.unsubscribe(channel)
+                    await pubsub.close()
+                except Exception:
+                    pass
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -7,40 +7,100 @@ class StoryService {
         this.repository = repository;
         this.currentJobId = null;
         this.eventSource = null;
+        this.pollingJobId = null;
     }
 
     /**
      * Get list of models for selection dropdown.
      */
     async loadModels() {
-        try {
-            const result = await this.repository.getModels();
-            return result.data || [];
-        } catch (error) {
-            console.error("Service error loading models:", error);
-            throw error;
-        }
+        const result = await this.repository.getModels();
+        return result.data || [];
     }
 
-    /**
-     * Start the chapter generation process.
-     */
-    async startGeneration(storyId, formValues, onStatusChange, onTokenReceived, onComplete, onError) {
-        try {
-            const headers = {
+    async searchLore(storyId, query) {
+        const result = await this.repository.searchLore(storyId, query);
+        return result.data || [];
+    }
+
+    async chat(storyId, payload) {
+        const result = await this.repository.chat(storyId, payload);
+        return result.data.reply;
+    }
+
+    async loadChats(storyId) {
+        const result = await this.repository.getChatThreads(storyId);
+        return (result.data || []).map(thread => ({
+            id: thread.id,
+            title: thread.title,
+            createdAt: thread.created_at,
+            messages: thread.messages || []
+        }));
+    }
+
+    async saveChatThread(storyId, thread) {
+        return this.repository.saveChatThread(storyId, thread);
+    }
+
+    async deleteChatThread(storyId, threadId) {
+        return this.repository.deleteChatThread(storyId, threadId);
+    }
+
+    async deleteChapter(storyId, chapterId) {
+        return this.repository.deleteChapter(storyId, chapterId);
+    }
+
+    async renameChapter(storyId, chapterId, title) {
+        return this.repository.renameChapter(storyId, chapterId, title);
+    }
+
+    async getChapter(storyId, chapterId) {
+        const result = await this.repository.getChapter(storyId, chapterId);
+        const chapter = result.data;
+        return {
+            chapterId: chapter.chapter_id,
+            versionId: chapter.version_id,
+            content: chapter.content,
+            model: chapter.model,
+            status: chapter.status
+        };
+    }
+
+    async exportChatChapter(storyId, payload) {
+        const result = await this.repository.exportChatChapter(storyId, payload);
+        const chapter = result.data;
+        return {
+            chapterId: chapter.chapter_id,
+            versionId: chapter.version_id,
+            title: chapter.title,
+            content: chapter.content,
+            model: payload.model,
+            status: chapter.status,
+            sourceThreadId: chapter.thread_id,
+            sourceMessageIndex: chapter.message_index
+        };
+    }
+
+    #generationRequest(formValues) {
+        return {
+            headers: {
                 'Idempotency-Key': 'idemp_' + Date.now(),
                 'X-Tenant-Id': 'tenant_web_01',
                 'X-User-Id': 'user_web_01'
-            };
-
-            const payload = {
+            },
+            payload: {
                 request: formValues.request,
                 model: formValues.model,
                 mode: 'ASYNC',
                 chapter: {
                     title: formValues.title,
                     target_word_count: parseInt(formValues.wordCount),
-                    tone: formValues.tone
+                    tone: formValues.tone,
+                    chapter_tone_override: formValues.chapterToneOverride,
+                    master_tone: formValues.masterTone,
+                    master_outline: formValues.masterOutline,
+                    condensed_outline: formValues.condensedOutline,
+                    character_wiki: formValues.characterWiki
                 },
                 generation_config: {
                     temperature: 0.8,
@@ -49,7 +109,16 @@ class StoryService {
                     auto_analyze: true
                 },
                 constraints: formValues.constraints
-            };
+            }
+        };
+    }
+
+    /**
+     * Start the chapter generation process.
+     */
+    async startGeneration(storyId, formValues, onStatusChange, onTokenReceived, onComplete, onError) {
+        try {
+            const { headers, payload } = this.#generationRequest(formValues);
 
             // 1. Submit job
             const response = await this.repository.generateChapter(storyId, payload, headers);
@@ -106,6 +175,9 @@ class StoryService {
 
         this.eventSource.onerror = (err) => {
             console.error("EventSource encountered an error:", err);
+            this.eventSource.close();
+            if (this.pollingJobId === jobId) return;
+            this.pollingJobId = jobId;
             this.pollJobCompletion(jobId, onComplete, onError);
         };
     }
@@ -115,7 +187,7 @@ class StoryService {
      */
     async pollJobCompletion(jobId, onComplete, onError) {
         let attempts = 0;
-        const maxAttempts = 15;
+        const maxAttempts = 90;
         const interval = 2000;
 
         const check = async () => {
@@ -125,17 +197,24 @@ class StoryService {
                 
                 if (job.status === 'COMPLETED' || job.status === 'NEEDS_MANUAL_REVIEW') {
                     if (this.eventSource) this.eventSource.close();
+                    this.pollingJobId = null;
                     onComplete(job.result);
                 } else if (job.status === 'FAILED') {
                     if (this.eventSource) this.eventSource.close();
+                    this.pollingJobId = null;
                     onError(new Error(job.error?.message || "Job failed."));
+                } else if (job.status === 'CANCELLED') {
+                    this.pollingJobId = null;
+                    onError(new Error("Job was cancelled."));
                 } else if (attempts < maxAttempts) {
                     attempts++;
                     setTimeout(check, interval);
                 } else {
+                    this.pollingJobId = null;
                     onError(new Error("Polling timeout waiting for completion."));
                 }
             } catch (err) {
+                this.pollingJobId = null;
                 onError(err);
             }
         };
@@ -147,109 +226,44 @@ class StoryService {
      * Approve the chapter version.
      */
     async approveChapter(storyId, chapterId, versionId) {
-        return await this.repository.approveChapter(storyId, chapterId, versionId, 'user_web_01');
+        return this.repository.approveChapter(storyId, chapterId, versionId, 'user_web_01');
     }
 
     /**
      * Reject and submit feedback (Regenerate).
      */
-    async regenerateChapter(storyId, chapterId, baseVersionId, feedback, modelName, onStatusChange, onTokenReceived, onComplete, onError) {
-        try {
-            const headers = {
-                'Idempotency-Key': 'idemp_regen_' + Date.now(),
-                'X-Tenant-Id': 'tenant_web_01',
-                'X-User-Id': 'user_web_01'
-            };
-
-            const response = await this.repository.regenerateChapter(storyId, chapterId, baseVersionId, feedback, modelName, headers);
-            onComplete(response.data);
-        } catch (error) {
-            onError(error);
-        }
-    }
-
-    /**
-     * Start the chapter generation process (Sync Mode).
-     */
-    async startGenerationSync(storyId, formValues, onStatusChange, onComplete, onError) {
-        try {
-            const headers = {
-                'Idempotency-Key': 'idemp_sync_' + Date.now(),
-                'X-Tenant-Id': 'tenant_web_01',
-                'X-User-Id': 'user_web_01'
-            };
-
-            const payload = {
-                request: formValues.request,
-                model: formValues.model,
-                mode: 'SYNC',
-                chapter: {
-                    title: formValues.title,
-                    target_word_count: parseInt(formValues.wordCount),
-                    tone: formValues.tone
-                },
-                generation_config: {
-                    temperature: 0.8,
-                    max_output_tokens: 3000,
-                    max_revision_attempts: 2,
-                    auto_analyze: true
-                },
-                constraints: formValues.constraints
-            };
-
-            onStatusChange({ status: 'PROCESSING', progress: 50, step: 'GENERATING' });
-
-            const response = await this.repository.generateChapterSync(storyId, payload, headers);
-            onComplete(response.data);
-        } catch (error) {
-            console.error("Service error starting sync generation:", error);
-            onError(error);
-        }
+    async regenerateChapter(storyId, chapterId, baseVersionId, feedback, modelName) {
+        const headers = {
+            'Idempotency-Key': 'idemp_regen_' + Date.now(),
+            'X-Tenant-Id': 'tenant_web_01',
+            'X-User-Id': 'user_web_01'
+        };
+        const response = await this.repository.regenerateChapter(storyId, chapterId, baseVersionId, feedback, modelName, headers);
+        return response.data;
     }
 
     /**
      * Continue writing the chapter.
      */
-    async continueChapter(storyId, chapterId, text, model, onComplete, onError) {
-        try {
-            const headers = {
-                'X-User-Id': 'user_web_01'
-            };
-            const payload = {
-                request: text,
-                model: model,
-                target_word_count: 1000,
-                generation_config: {
-                    temperature: 0.8,
-                    max_output_tokens: 3000
-                }
-            };
-            const response = await this.repository.continueChapter(storyId, chapterId, payload, headers);
-            onComplete(response.data);
-        } catch (error) {
-            console.error("Service error continuing chapter:", error);
-            onError(error);
-        }
+    async continueChapter(storyId, chapterId, text, model) {
+        const headers = { 'X-User-Id': 'user_web_01' };
+        const payload = {
+            request: text,
+            model,
+            target_word_count: 1000,
+            generation_config: { temperature: 0.8, max_output_tokens: 3000 }
+        };
+        const response = await this.repository.continueChapter(storyId, chapterId, payload, headers);
+        return response.data;
     }
 
     /**
      * Analyze a specific chapter version.
      */
-    async analyzeChapter(storyId, chapterId, versionId, onComplete, onError) {
-        try {
-            const headers = {
-                'X-User-Id': 'user_web_01'
-            };
-            const payload = {
-                version_id: versionId.toString(),
-                action: 'REVISION_REQUESTED'
-            };
-            const response = await this.repository.analyzeChapter(storyId, chapterId, payload, headers);
-            onComplete(response.data);
-        } catch (error) {
-            console.error("Service error analyzing chapter:", error);
-            onError(error);
-        }
+    async analyzeChapter(storyId, chapterId, versionId) {
+        const payload = { version_id: versionId.toString(), action: 'REVISION_REQUESTED' };
+        const response = await this.repository.analyzeChapter(storyId, chapterId, payload, { 'X-User-Id': 'user_web_01' });
+        return response.data;
     }
 
     /**
@@ -271,5 +285,13 @@ class StoryService {
             console.error("Service error cancelling job:", error);
             throw error;
         }
+    }
+
+    /**
+     * Update version content with user edits.
+     */
+    async updateChapterVersionContent(storyId, chapterId, versionId, content) {
+        const headers = { 'X-User-Id': 'user_web_01' };
+        return this.repository.updateChapterVersionContent(storyId, chapterId, versionId, content, headers);
     }
 }

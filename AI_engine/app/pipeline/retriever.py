@@ -1,10 +1,7 @@
-import logging
 from app.application.commands.story_commands import GenerateChapterCommand
 from app.infrastructure.db.postgres_client import get_recent_chapters_content
 from app.infrastructure.vector_store.pgvector_store import search_memories_vector
 from app.infrastructure.llm.llm_gateway import LLMGateway
-
-logger = logging.getLogger(__name__)
 
 class StoryRetriever:
     def __init__(self, gateway: LLMGateway):

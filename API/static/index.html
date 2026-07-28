@@ -1,189 +1,444 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Story Engine Dashboard</title>
+    <title>AI Story Engine - ChatGPT Workspace</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=3.3.2">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Header -->
-        <header class="app-header">
-            <div class="logo">
-                <span class="logo-icon">✍️</span>
-                <h1>AI Story Engine <span class="badge">v1.0</span></h1>
-            </div>
-            <div class="system-status">
-                <span class="status-indicator online"></span>
-                <span class="status-text">Connected to Engine</span>
-            </div>
-        </header>
-
-        <!-- Main Workspace -->
-        <main class="app-main">
-            <!-- COLUMN 1: Control Panel (Controller Input) -->
-            <section class="panel panel-control">
-                <div class="panel-header">
-                    <h2>⚙️ Cấu hình sinh chương</h2>
+    <div class="chatgpt-layout">
+        <!-- LEFT SIDEBAR (ChatGPT Style Navigation & Control) -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <span class="brand-icon">✨</span>
+                    <span class="brand-title">AI Story Engine</span>
+                    <span class="version-tag">v3.0</span>
                 </div>
-                <div class="panel-content">
-                    <form id="generation-form">
-                        <div class="form-group">
-                            <label for="story-id">Story ID (UUID)</label>
-                            <input type="text" id="story-id" value="3fa85f64-5717-4562-b3fc-2c963f66afa6" required>
-                        </div>
+            </div>
 
-                        <div class="form-group">
-                            <label for="model-select">Chọn mô hình LLM</label>
-                            <select id="model-select" required>
-                                <option value="" disabled selected>Đang nạp mô hình...</option>
-                            </select>
-                        </div>
+            <div class="sidebar-action" style="display:flex; flex-direction:column; gap:8px;">
+                <button id="btn-create-story" class="btn-new-chat">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>➕ Tạo Truyện Mới</span>
+                </button>
+                <button id="btn-create-subthread" class="btn-new-chat" style="background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-primary);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span>💬 Tạo Phiên Chat Mới</span>
+                </button>
+                <button id="btn-create-chapter" class="btn-new-chat" style="background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-primary);">
+                    <span>📖 Tạo Chương Mới</span>
+                </button>
+            </div>
 
-                        <div class="form-group">
-                            <label for="generation-mode">Chế độ sinh chương</label>
-                            <select id="generation-mode" required>
-                                <option value="ASYNC" selected>Bất đồng bộ (Async Job + SSE Stream)</option>
-                                <option value="SYNC">Đồng bộ (Sync Job - Chờ kết quả)</option>
-                            </select>
-                        </div>
+            <div class="sidebar-tools">
+                <button id="btn-story-mindmap" class="btn-story-tool" type="button">
+                    <span>🕸️</span>
+                    <span><strong>Story Mindmap</strong><small>Xem mạch chương</small></span>
+                </button>
+                <button id="btn-lore-finder" class="btn-story-tool" type="button">
+                    <span>🧠</span>
+                    <span><strong>Smart Lore Finder</strong><small>Tìm ký ức liên quan</small></span>
+                </button>
+            </div>
 
-                        <div class="form-group">
-                            <label for="chapter-title">Tiêu đề chương</label>
-                            <input type="text" id="chapter-title" placeholder="Ví dụ: Bức thư trong bóng tối" value="Bức thư trong bóng tối" required>
-                        </div>
+            <!-- Configuration & Stories List in Sidebar -->
+            <div class="sidebar-scroll">
+                <!-- Multi-Story Selection Section -->
+                <div class="config-section">
+                    <div class="section-title">📚 Danh sách Bộ Truyện</div>
+                    <div id="stories-list" class="stories-container">
+                        <!-- Story Cards Render Here -->
+                    </div>
+                    <button id="btn-story-archive" class="story-archive-button hidden" type="button">
+                        Kho lưu trữ · 0
+                    </button>
+                </div>
 
-                        <div class="form-row">
+                <!-- Sub-Chat Threads for Current Story -->
+                <div class="config-section">
+                    <div class="section-title">💬 Phiên Chat Thảo Luận / Thử Nghiệm</div>
+                    <div id="subthreads-list" class="subthreads-container">
+                        <!-- Subthreads Render Here -->
+                    </div>
+                </div>
+
+                <!-- Minimal Story Config -->
+                <div id="chapter-config" class="config-section">
+                    <div class="section-title">⚙️ Cấu hình chương hiện tại</div>
+                    
+                    <!-- Hidden Story ID running in background -->
+                    <input type="hidden" id="story-id">
+
+                    <div class="form-group">
+                        <label for="model-select">Mô hình AI</label>
+                        <select id="model-select" required>
+                            <option value="" disabled selected>Đang nạp mô hình...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="chapter-title">Tiêu đề chương</label>
+                        <input type="text" id="chapter-title" placeholder="Ví dụ: Chương 1: Tỉnh dậy">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="word-count">Số từ mục tiêu</label>
+                        <input type="number" id="word-count" value="1500" min="300" max="8000">
+                    </div>
+
+                    <details class="advanced-details">
+                        <summary class="advanced-summary">Tùy chọn nâng cao <span>⌄</span></summary>
+                        <div class="advanced-content">
                             <div class="form-group">
-                                <label for="word-count">Số từ mục tiêu</label>
-                                <input type="number" id="word-count" value="500" min="100" max="8000">
+                                <label for="chapter-tone-override">Giọng văn riêng cho chương</label>
+                                <input type="text" id="chapter-tone-override" placeholder="Bỏ trống để dùng giọng mặc định">
                             </div>
                             <div class="form-group">
-                                <label for="tone-select">Giọng văn (Tone)</label>
-                                <select id="tone-select">
-                                    <option value="suspense" selected>Kịch tính, bí ẩn</option>
-                                    <option value="action">Hành động dồn dập</option>
-                                    <option value="emotional">Tình cảm sâu lắng</option>
-                                    <option value="dark">Tăm tối, u uất</option>
-                                </select>
+                                <label for="constraints-list">Ràng buộc đặc biệt</label>
+                                <textarea id="constraints-list" rows="2" placeholder="Ví dụ: Kết thúc bằng cliffhanger..."></textarea>
                             </div>
                         </div>
-
-                        <div class="form-group">
-                            <label for="user-prompt">Yêu cầu nội dung chương truyện</label>
-                            <textarea id="user-prompt" rows="4" placeholder="Minh đột nhập vào thư phòng bí mật để tìm bức thư phản bội..." required>Minh đột nhập vào thư phòng bí mật để tìm bức thư phản bội...</textarea>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="constraints-list">Ràng buộc đặc biệt (Mỗi dòng một dòng)</label>
-                            <textarea id="constraints-list" rows="2" placeholder="Không để nhân vật chính biết danh tính phản diện cuối cùng...">Không được để Minh biết danh tính phản diện cuối cùng&#10;Kết thúc bằng cliffhanger</textarea>
-                        </div>
-
-                        <button type="submit" id="btn-generate" class="btn btn-primary">
-                            <span>✨ Sinh Chương Truyện</span>
-                        </button>
-                    </form>
+                    </details>
                 </div>
-            </section>
 
-            <!-- COLUMN 2: Editor & Real-Time Stream (View Outputs) -->
-            <section class="panel panel-editor">
-                <div class="panel-header">
-                    <h2>📝 Bản nháp chương truyện</h2>
+                <!-- Recent Chapters History for Selected Story -->
+                <div class="history-section">
+                    <div class="section-title">📖 Chương gần đây</div>
+                    <div id="chapters-history-list" class="history-list">
+                        <!-- Chapters Render Here -->
+                    </div>
+                    <button id="btn-chapter-archive" class="chapter-archive-button hidden" type="button">
+                        Kho chương
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="system-status">
+                    <span class="status-indicator online"></span>
+                    <span class="status-text">Engine Online</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER MAIN WORKSPACE (ChatGPT Style Feed & Active Editor) -->
+        <main class="chat-workspace">
+            <!-- Workspace Topbar Header -->
+            <header class="workspace-header">
+                <div class="header-left">
+                    <button id="btn-topbar-sidebar-toggle" class="btn-icon" title="Đóng/Mở Sidebar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <div class="active-chapter-info">
+                        <span id="active-story-name" class="active-story-text">Truyện 1</span>
+                        <span class="divider">•</span>
+                        <span id="active-title" class="active-title-text">Chương mới</span>
+                        <span id="active-model-badge" class="model-badge">gemini-2.0-flash</span>
+                        <nav id="chapter-navigation" class="chapter-navigation hidden" aria-label="Điều hướng chương">
+                            <button id="btn-previous-chapter" type="button">← Chương trước</button>
+                            <button id="btn-next-chapter" type="button">Chương sau →</button>
+                        </nav>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <!-- Theme Toggle Button -->
+                    <button id="btn-theme-toggle" class="btn-icon btn-theme" title="Chuyển đổi Chế độ Sáng/Tối">
+                        <span id="theme-icon">🌙</span>
+                        <span id="theme-label">Tối</span>
+                    </button>
+
                     <div id="job-progress-container" class="job-progress-wrapper hidden">
                         <span id="job-step" class="job-step-text">Đang chuẩn bị...</span>
-                        <div class="progress-bar-container" style="display: flex; align-items: center; gap: 10px; width: 100%;">
-                            <div class="progress-bar" style="flex-grow: 1;">
-                                <div id="job-progress-fill" class="progress-fill" style="width: 0%;"></div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar">
+                                <div id="job-progress-fill" class="progress-fill"></div>
                             </div>
-                            <button type="button" id="btn-cancel-job" class="btn" style="padding: 4px 8px; font-size: 12px; background: var(--color-error); color: white; border: none; border-radius: 4px; cursor: pointer;">Hủy</button>
+                            <button type="button" id="btn-cancel-job" class="btn-cancel">Hủy</button>
                         </div>
                     </div>
                 </div>
-                <div class="panel-content">
-                    <div class="editor-container">
-                        <div id="stream-output" class="stream-box" contenteditable="true" placeholder="Nội dung chương truyện sinh bởi AI sẽ hiển thị hoặc viết tại đây..."></div>
-                    </div>
-                </div>
-            </section>
+            </header>
 
-            <!-- COLUMN 3: Quality Check & Memory Updates -->
-            <section class="panel panel-sidebar">
-                <!-- Quality Analysis Section -->
-                <div class="sub-panel panel-analysis">
-                    <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                        <h2>🔍 Đánh giá chất lượng (Analyzer)</h2>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <button type="button" id="btn-analyze" class="btn" style="padding: 4px 8px; font-size: 11px; background: #0ea5e9; color: white; border: none; border-radius: 4px; cursor: pointer;">🔍 Đánh giá lại</button>
-                            <div id="quality-score" class="score-badge hidden">90</div>
-                        </div>
-                    </div>
-                    <div class="panel-content">
-                        <div id="analysis-idle" class="info-placeholder">
-                            Chưa có bản nháp để phân tích. Hãy nhấn sinh chương truyện.
-                        </div>
-                        <div id="analysis-results" class="analysis-box hidden">
-                            <div class="status-summary">
-                                <span class="label">Trạng thái:</span>
-                                <span id="analysis-status-badge" class="badge-status">Passed</span>
-                            </div>
-                            <div id="issues-list" class="issues-container">
-                                <!-- Issue items render here -->
-                            </div>
-                        </div>
-                    </div>
+            <!-- Scrollable Content Feed (ChatGPT Conversation + Document Cards) -->
+            <div id="chat-scroll-feed" class="chat-feed">
+                <!-- Welcome Banner when idle -->
+                <div id="welcome-container" class="welcome-box">
+                    <div class="welcome-icon">✍️</div>
+                    <h2>Trợ lý Viết Truyện Dài Tập AI</h2>
+                    <p>Tạo hoặc chọn bộ truyện bên Sidebar, dán Đề cương Tổng quát và bắt đầu sáng tác.</p>
                 </div>
 
-                <!-- Long-Term Memory Section -->
-                <div class="sub-panel panel-memory">
-                    <div class="panel-header">
-                        <h2>🧠 Ký ức được lưu trữ (Memory)</h2>
-                    </div>
-                    <div class="panel-content">
-                        <div id="memory-idle" class="info-placeholder">
-                            Chương truyện chưa được duyệt. Phê duyệt để lưu trữ ký ức dài hạn.
-                        </div>
-                        <div id="memory-results" class="memory-box hidden">
-                            <div class="memory-section">
-                                <h3>📌 Tóm tắt chương mới:</h3>
-                                <p id="mem-summary">...</p>
-                            </div>
-                            <div class="memory-section">
-                                <h3>🔹 Sự kiện trích xuất:</h3>
-                                <ul id="mem-facts">
-                                    <!-- Facts render here -->
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <div id="chat-thread" class="chat-thread hidden" aria-live="polite"></div>
 
-                <!-- Action Controls Section -->
-                <div id="action-panel" class="action-panel hidden">
-                    <div class="form-group">
-                        <label for="feedback-input">Ý kiến phản hồi / Yêu cầu sửa đổi / Yêu cầu viết tiếp</label>
-                        <textarea id="feedback-input" rows="2" placeholder="Ví dụ: Viết tiếp bằng việc đột nhập thư phòng... hoặc Viết lại đoạn cuối kịch tính hơn..."></textarea>
+                <!-- Active Document & Chat Feed Item -->
+                <div id="feed-thread" class="feed-thread hidden">
+                    <!-- User Prompt Bubble -->
+                    <div id="user-prompt-row" class="message-row user-row">
+                        <div class="avatar user-avatar">👤</div>
+                        <div class="message-bubble user-bubble">
+                            <div class="bubble-header">Yêu cầu người dùng</div>
+                            <div id="user-prompt-display" class="bubble-text">...</div>
+                        </div>
                     </div>
-                    <div class="action-buttons" style="display: flex; gap: 8px;">
-                        <button id="btn-approve" class="btn btn-success" style="flex: 1;">✅ Duyệt & Lưu ký ức</button>
-                        <button id="btn-regenerate" class="btn btn-warning" style="flex: 1;">🔄 Tái tạo</button>
-                        <button id="btn-continue" class="btn" style="flex: 1; background: #6366f1; color: white;">✍️ Viết tiếp</button>
+
+                    <!-- AI Generated Document Card with Inline Editor -->
+                    <div class="message-row ai-row">
+                        <div class="avatar ai-avatar">✨</div>
+                        <div class="message-card ai-card">
+                            <!-- Document Header Toolbar -->
+                            <div class="card-toolbar">
+                                <div class="toolbar-left">
+                                    <span class="card-label">📖 Nội dung chương</span>
+                                    <span id="chapter-status-badge" class="chapter-status-badge hidden">Bản nháp</span>
+                                    <span id="edit-indicator" class="edit-badge hidden">✏️ Đang sửa</span>
+                                </div>
+                                <div class="toolbar-right">
+                                    <span id="live-word-count" class="word-counter">📊 0 từ | 0 ký tự</span>
+                                    
+                                    <!-- Download / Export Dropdown Button -->
+                                    <div class="export-dropdown-wrapper">
+                                        <button type="button" id="btn-export" class="toolbar-btn" title="Tải xuống chương truyện">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                            <span>Tải về ▾</span>
+                                        </button>
+                                        <div id="export-menu" class="export-menu hidden">
+                                            <button type="button" id="export-txt" class="export-item">📄 File TXT (.txt)</button>
+                                            <button type="button" id="export-doc" class="export-item">📝 File Word (.doc)</button>
+                                            <button type="button" id="export-pdf" class="export-item">🖨️ Xuất PDF / In (.pdf)</button>
+                                        </div>
+                                    </div>
+
+                                    <button type="button" id="btn-copy-text" class="toolbar-btn" title="Sao chép toàn bộ nội dung">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        <span>Sao chép</span>
+                                    </button>
+                                    <button type="button" id="btn-toggle-edit" class="toolbar-btn primary" title="Bật/Tắt quyền chỉnh sửa nội dung">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                        <span id="edit-btn-text">Sửa trực tiếp</span>
+                                    </button>
+                                    <button type="button" id="btn-save-edit" class="toolbar-btn success hidden" title="Lưu bản sửa vào Database">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                        <span>Lưu</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- INLINE EDITABLE CONTENT BOX -->
+                            <div class="editor-wrapper">
+                                <div id="stream-output" class="editor-content" contenteditable="true" spellcheck="false" placeholder="Nội dung chương truyện sinh bởi AI sẽ hiển thị hoặc chỉnh sửa trực tiếp tại đây..."></div>
+                            </div>
+
+                            <details class="chapter-meta-details">
+                                <summary>Phân tích & ký ức</summary>
+                            <!-- Integrated Quality Analysis Card -->
+                            <div class="analysis-section">
+                                <div class="section-header">
+                                    <div class="title-group">
+                                        <span>🔍 Đánh giá chất lượng (Story Analyzer)</span>
+                                        <span id="quality-score" class="score-badge hidden">90</span>
+                                    </div>
+                                    <button type="button" id="btn-analyze" class="btn-sub">🔍 Kiểm tra lại</button>
+                                </div>
+                                <div id="analysis-idle" class="info-placeholder">
+                                    Đang phân tích chất lượng văn bản...
+                                </div>
+                                <div id="analysis-results" class="analysis-content hidden">
+                                    <div class="status-summary">
+                                        <span>Trạng thái:</span>
+                                        <span id="analysis-status-badge" class="badge-status passed">Passed</span>
+                                    </div>
+                                    <div id="issues-list" class="issues-container"></div>
+                                </div>
+                            </div>
+
+                            <!-- Integrated Long-Term Memory Summary Card -->
+                            <div id="memory-container" class="memory-section">
+                                <div class="section-header">
+                                    <span>🧠 Ký ức dài hạn (Vector Memory)</span>
+                                </div>
+                                <div id="memory-idle" class="info-placeholder">
+                                    Chương truyện chưa được duyệt. Nhấn "Duyệt & Lưu" để ghi nhận ký ức vào Vector Store.
+                                </div>
+                                <div id="memory-results" class="memory-content hidden">
+                                    <div class="mem-block">
+                                        <strong>📌 Tóm tắt chương:</strong>
+                                        <p id="mem-summary">...</p>
+                                    </div>
+                                    <div class="mem-block">
+                                        <strong>🔹 Sự kiện mới trích xuất:</strong>
+                                        <ul id="mem-facts"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                            </details>
+
+                            <!-- Action Panel (Approve, Continue, Regenerate) -->
+                            <div id="action-panel" class="action-bar hidden">
+                                <div class="action-buttons chapter-primary-actions">
+                                    <button id="btn-approve" class="btn-action success">✅ Duyệt & Lưu Ký ức</button>
+                                </div>
+                                <details class="chapter-ai-tools">
+                                    <summary>Nhờ AI viết lại hoặc viết tiếp</summary>
+                                    <div class="feedback-box">
+                                        <label for="feedback-input">Chỉ dẫn cho AI:</label>
+                                        <textarea id="feedback-input" rows="2" placeholder="Ví dụ: Tăng miêu tả tâm lý hoặc viết tiếp cảnh mở cửa bí mật..."></textarea>
+                                    </div>
+                                    <div class="action-buttons">
+                                        <button id="btn-continue" class="btn-action primary">✍️ Viết tiếp</button>
+                                        <button id="btn-regenerate" class="btn-action warning">🔄 Tái tạo lại</button>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </section>
+            </div>
+
+            <!-- BOTTOM STICKY CHATGPT INPUT BAR -->
+            <div id="chat-input-container" class="chat-input-container">
+                <form id="generation-form" class="chat-input-form">
+                    <div class="textarea-wrapper">
+                        <textarea id="user-prompt" class="chat-textarea" rows="2" minlength="5" maxlength="5000" placeholder="Nhập yêu cầu hoặc nội dung trao đổi... (Enter để gửi, Shift+Enter để xuống dòng)" required></textarea>
+                        <button type="submit" id="btn-generate" class="btn-send" title="Gửi yêu cầu tới AI Engine">
+                            <span class="send-icon">✨</span>
+                            <span id="send-text" class="send-text">Gửi yêu cầu</span>
+                        </button>
+                    </div>
+                    <div class="input-footer">
+                        <span class="hint-text">💡 <strong>Mẹo keyboard:</strong> Bấm <strong>Enter</strong> để gửi nhanh, bấm <strong>Shift + Enter</strong> để xuống dòng.</span>
+                    </div>
+                </form>
+            </div>
         </main>
     </div>
 
+    <!-- Create Story with Outline & Master Tone Modal -->
+    <dialog id="new-story-dialog" class="story-dialog" aria-labelledby="new-story-title">
+        <div class="story-dialog-panel">
+            <header class="story-dialog-header">
+                <div>
+                    <span class="dialog-eyebrow">Bộ truyện mới</span>
+                    <h2 id="new-story-title" class="dialog-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+                        <span>Tạo bộ truyện mới</span>
+                    </h2>
+                </div>
+                <button id="btn-close-new-story" class="dialog-close" type="button" aria-label="Đóng">&times;</button>
+            </header>
+            <form id="new-story-form" class="story-dialog-form">
+                <div class="form-group">
+                    <label for="modal-story-title" class="dialog-label">Tên bộ truyện</label>
+                    <input type="text" id="modal-story-title" class="dialog-input" placeholder="Ví dụ: Thế giới dung hợp" autofocus required>
+                </div>
+                <div class="form-group">
+                    <label for="modal-master-tone" class="dialog-label">
+                        <span>Giọng văn mặc định</span>
+                        <span class="dialog-optional">Không bắt buộc</span>
+                    </label>
+                    <textarea id="modal-master-tone" class="dialog-textarea dialog-tone" rows="2" placeholder="Ví dụ: Thô mộc, đời thực, nhịp nhanh"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="modal-master-outline" class="dialog-label">
+                        <span>Đề cương tổng quát</span>
+                        <span class="dialog-optional">Không bắt buộc</span>
+                    </label>
+                    <textarea id="modal-master-outline" class="dialog-textarea" rows="5" placeholder="Tóm tắt thế giới, nhân vật và hướng phát triển chính..."></textarea>
+                </div>
+                <div class="dialog-actions">
+                    <button type="button" id="btn-cancel-new-story" class="dialog-cancel">Hủy</button>
+                    <button type="submit" class="btn-submit">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                        <span>Tạo bộ truyện</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog id="story-archive-dialog" class="story-dialog" aria-labelledby="story-archive-title">
+        <div class="story-dialog-panel">
+            <header class="story-dialog-header">
+                <div>
+                    <span class="dialog-eyebrow">Dữ liệu vẫn được giữ nguyên</span>
+                    <h2 id="story-archive-title">Kho lưu trữ truyện</h2>
+                </div>
+                <button id="btn-close-story-archive" class="dialog-close" type="button" aria-label="Đóng">×</button>
+            </header>
+            <div id="story-archive-list" class="story-archive-list"></div>
+        </div>
+    </dialog>
+
+    <dialog id="chapter-archive-dialog" class="story-dialog" aria-labelledby="chapter-archive-title">
+        <div class="story-dialog-panel">
+            <header class="story-dialog-header">
+                <div>
+                    <span class="dialog-eyebrow">Thư viện bộ truyện</span>
+                    <h2 id="chapter-archive-title">Kho chương</h2>
+                </div>
+                <button id="btn-close-chapter-archive" class="dialog-close" type="button" aria-label="Đóng">×</button>
+            </header>
+            <div class="chapter-archive-toolbar">
+                <input id="chapter-archive-search" type="search" placeholder="Tìm theo số hoặc tên chương..." aria-label="Tìm chương">
+                <select id="chapter-archive-sort" aria-label="Sắp xếp chương">
+                    <option value="oldest">Từ chương 1</option>
+                    <option value="newest">Mới nhất</option>
+                </select>
+                <span id="chapter-archive-count"></span>
+            </div>
+            <div id="chapter-archive-list" class="history-list chapter-archive-list"></div>
+            <footer class="chapter-archive-footer">
+                <button id="btn-load-more-chapters" type="button">Xem thêm</button>
+            </footer>
+        </div>
+    </dialog>
+
+    <dialog id="story-mindmap-dialog" class="story-dialog" aria-labelledby="mindmap-title">
+        <div class="story-dialog-panel">
+            <header class="story-dialog-header">
+                <div>
+                    <span class="dialog-eyebrow">Story Explorer</span>
+                    <h2 id="mindmap-title">Story Mindmap</h2>
+                </div>
+                <button id="btn-close-mindmap" class="dialog-close" type="button" aria-label="Đóng">×</button>
+            </header>
+            <div id="story-mindmap-content" class="mindmap-canvas"></div>
+        </div>
+    </dialog>
+
+    <dialog id="lore-finder-dialog" class="story-dialog" aria-labelledby="lore-title">
+        <div class="story-dialog-panel">
+            <header class="story-dialog-header">
+                <div>
+                    <span class="dialog-eyebrow">Vector Memory</span>
+                    <h2 id="lore-title">Smart Lore Finder</h2>
+                </div>
+                <button id="btn-close-lore" class="dialog-close" type="button" aria-label="Đóng">×</button>
+            </header>
+            <form id="lore-search-form" class="lore-search-form">
+                <input id="lore-query" type="search" minlength="2" maxlength="500" required
+                       placeholder="Tìm nhân vật, sự kiện, địa điểm hoặc chi tiết cốt truyện...">
+                <button id="btn-search-lore" type="submit">Tìm lore</button>
+            </form>
+            <div id="lore-results" class="lore-results" aria-live="polite">
+                <p class="story-tool-empty">Nhập điều bạn muốn nhớ lại trong truyện.</p>
+            </div>
+        </div>
+    </dialog>
+
     <!-- MVC Frontend Scripts -->
-    <script src="/static/storyRepository.js"></script>
-    <script src="/static/storyService.js"></script>
-    <script src="/static/storyController.js"></script>
+    <script src="/static/storyRepository.js?v=3.3.1"></script>
+    <script src="/static/storyService.js?v=3.3.1"></script>
+    <script src="/static/storyExplorer.js?v=3.1.3"></script>
+    <script src="/static/storyExporter.js?v=3.1.3"></script>
+    <script src="/static/storyWorkspace.js?v=3.2.3"></script>
+    <script src="/static/storyAnalysisRenderer.js?v=3.1.4"></script>
+    <script src="/static/storyController.js?v=3.4.1"></script>
     <script>
-        // Entry point: Initialize the MVC app when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
             const repository = new StoryRepository();
             const service = new StoryService(repository);

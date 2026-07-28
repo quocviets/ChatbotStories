@@ -3,10 +3,12 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.infrastructure.db.postgres_client import init_postgres, close_postgres
 from app.infrastructure.redis.redis_client import init_redis, close_redis
 from app.workers.generation_worker import worker_loop
+from app.domain.exceptions.story_exceptions import ProviderException
 
 from app.api.v1.story_generation_router import router as generation_router
 from app.api.v1.story_analysis_router import router as analysis_router
@@ -72,6 +74,12 @@ app = FastAPI(
     openapi_tags=tags_metadata,
     lifespan=lifespan
 )
+
+
+@app.exception_handler(ProviderException)
+async def provider_exception_handler(_, exc: ProviderException):
+    logger.error("LLM provider unavailable: %s", exc)
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 # CORS middleware for local frontend development
 app.add_middleware(

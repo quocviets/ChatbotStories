@@ -87,4 +87,14 @@ class StoryAnalyzer:
             )
         except Exception as e:
             logger.error(f"Failed to parse Analyzer JSON response: {e}. Raw content: {response.content}")
-            return AnalysisResult(passed=True, score=90, issues=[])
+            return AnalysisResult(
+                passed=False,
+                score=0,
+                issues=[Issue(
+                    type="WRITING_ISSUE",
+                    severity="HIGH",
+                    description="Analyzer returned an invalid response.",
+                    suggested_action="Run analysis again before approving this version."
+                )],
+                primary_issue_type="WRITING_ISSUE"
+            )

@@ -1,4 +1,5 @@
 from typing import Any, Literal, Optional
+from uuid import UUID
 from pydantic import BaseModel, Field
 
 
@@ -7,6 +8,11 @@ class ChapterOptions(BaseModel):
     target_word_count: int = Field(default=2000, ge=300, le=10000)
     pov_character_id: Optional[str] = None
     tone: Optional[str] = None
+    chapter_tone_override: Optional[str] = None
+    master_tone: Optional[str] = None
+    master_outline: Optional[str] = None
+    condensed_outline: Optional[str] = None
+    character_wiki: Optional[dict[str, Any]] = None
 
 
 class GenerationConfig(BaseModel):
@@ -24,6 +30,38 @@ class GenerateChapterRequest(BaseModel):
     generation_config: GenerationConfig = GenerationConfig()
     constraints: list[str] = []
     metadata: dict[str, str] = {}
+
+
+class StoryChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=20000)
+
+
+class StoryChatRequest(BaseModel):
+    message: str = Field(..., min_length=5, max_length=5000)
+    model: str
+    thread_id: Optional[UUID] = None
+    thread_title: str = Field(default="Chat", min_length=1, max_length=200)
+    history: list[StoryChatMessage] = Field(default_factory=list, max_length=30)
+    master_outline: str = Field(default="", max_length=20000)
+    master_tone: str = Field(default="", max_length=2000)
+
+
+class StoryChatThreadSaveRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    messages: list[StoryChatMessage] = Field(default_factory=list, max_length=500)
+
+
+class RenameChapterRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+
+
+class ExportChatChapterRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1, max_length=100000)
+    model: str = Field(default="gemini-long-context", min_length=1, max_length=100)
+    thread_id: UUID
+    message_index: int = Field(..., ge=0)
 
 
 class RegenerateChapterRequest(BaseModel):
@@ -84,8 +122,6 @@ class LLMRequest(BaseModel):
     messages: list[dict[str, str]]
     temperature: float = 0.8
     max_tokens: int = 4096
-    top_p: Optional[float] = None
-    stop: Optional[list[str]] = None
     response_format: str = "text"
     metadata: dict[str, Any] = {}
 
@@ -98,30 +134,3 @@ class LLMResponse(BaseModel):
     usage: LLMUsage = LLMUsage()
     latency_ms: int = 0
     raw_response_id: Optional[str] = None
-
-
-# Generation Results and Job Models
-class GenerationResult(BaseModel):
-    chapter_id: str
-    version_id: str
-    status: str
-    title: Optional[str] = None
-    content: Optional[str] = None
-    analysis: Optional[AnalysisResult] = None
-    generation: Optional[dict[str, Any]] = None
-
-
-class JobState(BaseModel):
-    job_id: str
-    story_id: str
-    chapter_id: Optional[str] = None
-    status: str  # QUEUED, PLANNING, RETRIEVING, BUILDING_PROMPT, GENERATING, ANALYZING, READY_FOR_REVIEW, COMPLETED, FAILED, CANCELLED, NEEDS_MANUAL_REVIEW
-    current_step: Optional[str] = None
-    progress: int = 0
-    attempt: int = 0
-    max_attempts: int = 3
-    result: Optional[dict[str, Any]] = None
-    error: Optional[str] = None
-    created_at: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
