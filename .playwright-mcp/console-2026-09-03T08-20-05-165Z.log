@@ -1,0 +1,14 @@
+[     724ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8000/favicon.ico:0
+[    5958ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[    7832ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[    9009ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   10579ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   11837ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   12436ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   15532ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   19471ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   62941ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   82373ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   93925ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[  107228ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[  116485ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164

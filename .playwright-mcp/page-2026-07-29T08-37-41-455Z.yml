@@ -1,0 +1,74 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: ✨
+      - generic [ref=e7]: AI Story Engine
+      - generic [ref=e8]: v3.0
+    - generic [ref=e9]:
+      - button "Tạo Truyện Mới" [ref=e10] [cursor=pointer]
+      - button "Tạo Phiên Chat Mới" [ref=e13] [cursor=pointer]
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]: 📚 Danh sách Bộ Truyện
+        - generic [ref=e20]:
+          - generic [ref=e21] [cursor=pointer]:
+            - generic [ref=e22]: Thế Giới Dung Hợp 2026
+            - generic [ref=e23]: 1 chương
+            - button "Lưu trữ Thế Giới Dung Hợp 2026" [ref=e24]: 📦
+          - generic [ref=e25] [cursor=pointer]:
+            - generic [ref=e26]: Truyện 1
+            - generic [ref=e27]: 0 chương
+            - button "Lưu trữ Truyện 1" [ref=e28]: 📦
+      - generic [ref=e29]:
+        - generic [ref=e30]: 💬 Phiên Chat Thảo Luận / Thử Nghiệm
+        - generic [ref=e32] [cursor=pointer]:
+          - generic [ref=e33]: 💬
+          - generic [ref=e34]: Chat 1 - Thử Nghiệm Kịch Bản
+          - button "Xóa chat Chat 1 - Thử Nghiệm Kịch Bản" [ref=e35]: ×
+      - generic [ref=e36]:
+        - generic [ref=e37]: 📖 Chương gần đây
+        - generic [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: 📖
+          - generic [ref=e41]: Chương 1
+          - button "Đổi tên Chương 1" [ref=e42]: ✎
+          - button "Xóa Chương 1" [ref=e43]: ×
+    - generic [ref=e44]: Engine Online
+  - main [ref=e48]:
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - button "Đóng/Mở Sidebar" [ref=e51] [cursor=pointer]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Thế Giới Dung Hợp 2026
+          - generic [ref=e55]: •
+          - generic [ref=e56]: Chọn phiên chat
+          - generic [ref=e57]: gemini-2.0-flash
+      - button "Chuyển sang chế độ sáng" [ref=e59] [cursor=pointer]:
+        - generic [ref=e60]: 🌙
+        - generic [ref=e61]: Tối
+    - generic [ref=e62]:
+      - generic [ref=e63]:
+        - generic [ref=e64]: 💬
+        - heading "Bắt đầu từ cuộc trò chuyện" [level=2] [ref=e65]
+        - paragraph [ref=e66]: Tạo hoặc chọn một phiên chat, phát triển ý tưởng rồi bấm “Viết thành chương” khi đã chốt phương án.
+      - text: Nội dung chương truyện sinh bởi AI sẽ hiển thị hoặc chỉnh sửa trực tiếp tại đây...
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - textbox "Nhập nội dung trao đổi... (Enter để gửi, Shift+Enter để xuống dòng)" [ref=e70]
+        - button "✨ Gửi yêu cầu" [ref=e71] [cursor=pointer]:
+          - generic [ref=e72]: ✨
+          - generic [ref=e73]: Gửi yêu cầu
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - text: 💡
+          - strong [ref=e76]: "Mẹo keyboard:"
+          - text: Bấm
+          - strong [ref=e77]: Enter
+          - text: để gửi nhanh, bấm
+          - strong [ref=e78]: Shift + Enter
+          - text: để xuống dòng.
+        - generic [ref=e79]:
+          - generic [ref=e80]: Mô hình
+          - combobox "Mô hình" [ref=e81]:
+            - option "claude-sonnet (anthropic)"
+            - option "gpt-writing (openai)"
+            - option "gemini-long-context (google)" [selected]

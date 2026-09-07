@@ -11,6 +11,21 @@ class StoryExporter {
         return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
     }
 
+    static stripMarkdownFormatting(text) {
+        return String(text || '')
+            .replace(/^#{1,6}\s+/gm, '')
+            .replace(/\*\*\*([^*\n]+)\*\*\*/g, '$1')
+            .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+            .replace(/\*([^*\n]+)\*/g, '$1');
+    }
+
+    static formatInlineMarkdown(text) {
+        return this.escapeHtml(String(text || ''))
+            .replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    }
+
     static triggerDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -23,12 +38,13 @@ class StoryExporter {
     }
 
     static exportTxt(text, title = 'Chuong_truyen') {
-        if (!text || !text.trim()) {
+        const plainText = this.stripMarkdownFormatting(text);
+        if (!plainText.trim()) {
             alert("Chưa có nội dung để tải về.");
             return;
         }
         const filename = `${this.safeFilename(title, 'Chuong_truyen')}.txt`;
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob([plainText], { type: 'text/plain;charset=utf-8' });
         this.triggerDownload(blob, filename);
     }
 
@@ -38,6 +54,11 @@ class StoryExporter {
             return;
         }
         const safeTitle = this.escapeHtml(title);
+        const body = text.trim().split(/\n{2,}/).map(block => {
+            const heading = block.match(/^#{1,6}\s+([^\n]+)$/);
+            if (heading) return `<h2>${this.formatInlineMarkdown(heading[1])}</h2>`;
+            return `<p>${this.formatInlineMarkdown(block).replace(/\n/g, '<br>')}</p>`;
+        }).join('');
         const htmlContent = `
             <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
             <head><meta charset='utf-8'><title>${safeTitle}</title>
@@ -49,7 +70,7 @@ class StoryExporter {
             </head>
             <body>
                 <h1>${safeTitle}</h1>
-                ${text.split('\n\n').map(p => `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('')}
+                ${body}
             </body>
             </html>
         `;

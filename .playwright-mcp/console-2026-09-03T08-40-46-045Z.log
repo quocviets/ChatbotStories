@@ -1,0 +1,4 @@
+[     700ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8000/favicon.ico:0
+[    2937ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.2:168
+[   12623ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.2:168
+[   21777ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.2:168

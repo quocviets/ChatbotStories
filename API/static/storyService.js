@@ -18,6 +18,50 @@ class StoryService {
         return result.data || [];
     }
 
+    #mapStory(story) {
+        return {
+            id: story.id,
+            title: story.title,
+            masterTone: story.master_tone || '',
+            masterOutline: story.master_outline || '',
+            createdAt: story.created_at,
+            archivedAt: story.archived_at,
+            chapterCount: Number(story.chapter_count || 0),
+            chatCount: Number(story.chat_count || 0)
+        };
+    }
+
+    async loadStories() {
+        const result = await this.repository.getStories();
+        return (result.data || []).map(story => this.#mapStory(story));
+    }
+
+    async importLegacyStories(stories) {
+        if (!stories.length) return;
+        await this.repository.importLegacyStories(stories.map(story => ({
+            id: story.id,
+            title: story.title,
+            master_tone: story.masterTone || '',
+            master_outline: story.masterOutline || '',
+            created_at: story.createdAt || null,
+            archived_at: story.archivedAt || null
+        })));
+    }
+
+    async createStory(title, masterTone = '', masterOutline = '') {
+        const result = await this.repository.createStory({
+            title,
+            master_tone: masterTone,
+            master_outline: masterOutline
+        });
+        return this.#mapStory(result.data);
+    }
+
+    async setStoryArchived(storyId, archived) {
+        const result = await this.repository.updateStory(storyId, { archived });
+        return this.#mapStory(result.data);
+    }
+
     async searchLore(storyId, query) {
         const result = await this.repository.searchLore(storyId, query);
         return result.data || [];
@@ -50,6 +94,28 @@ class StoryService {
         return this.repository.deleteChapter(storyId, chapterId);
     }
 
+    async loadChapters(storyId) {
+        const result = await this.repository.getChapters(storyId);
+        return {
+            chapters: (result.data || []).map(chapter => ({
+                chapterId: chapter.chapter_id,
+                chapterNumber: chapter.chapter_number,
+                versionId: chapter.version_id,
+                title: chapter.title,
+                content: chapter.content,
+                model: chapter.model,
+                status: chapter.status,
+                sourceThreadId: chapter.thread_id,
+                sourceMessageIndex: chapter.message_index
+            })),
+            deletedSources: (result.deleted_sources || []).map(source => ({
+                chapterId: source.chapter_id,
+                sourceThreadId: source.thread_id,
+                sourceMessageIndex: source.message_index
+            }))
+        };
+    }
+
     async renameChapter(storyId, chapterId, title) {
         return this.repository.renameChapter(storyId, chapterId, title);
     }
@@ -62,19 +128,6 @@ class StoryService {
             versionId: chapter.version_id,
             content: chapter.content,
             model: chapter.model,
-            status: chapter.status
-        };
-    }
-
-    async exportChatChapter(storyId, payload) {
-        const result = await this.repository.exportChatChapter(storyId, payload);
-        const chapter = result.data;
-        return {
-            chapterId: chapter.chapter_id,
-            versionId: chapter.version_id,
-            title: chapter.title,
-            content: chapter.content,
-            model: payload.model,
             status: chapter.status,
             sourceThreadId: chapter.thread_id,
             sourceMessageIndex: chapter.message_index
@@ -108,7 +161,8 @@ class StoryService {
                     max_revision_attempts: 2,
                     auto_analyze: true
                 },
-                constraints: formValues.constraints
+                constraints: formValues.constraints,
+                metadata: formValues.metadata || {}
             }
         };
     }

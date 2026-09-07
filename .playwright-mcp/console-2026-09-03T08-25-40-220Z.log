@@ -1,0 +1,2 @@
+[   12022ms] [WARNING] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) @ http://127.0.0.1:8000/static/dictationController.js?v=1.2.0:164
+[   77498ms] [ERROR] Failed to load resource: the server responded with a status of 422 (Unprocessable Content) @ http://127.0.0.1:8000/api/v1/ai/transcriptions:0

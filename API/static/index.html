@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=3.3.2">
+    <link rel="stylesheet" href="/static/style.css?v=3.4.1">
 </head>
 <body>
     <div class="chatgpt-layout">
@@ -24,25 +24,11 @@
             <div class="sidebar-action" style="display:flex; flex-direction:column; gap:8px;">
                 <button id="btn-create-story" class="btn-new-chat">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    <span>➕ Tạo Truyện Mới</span>
+                    <span>Tạo Truyện Mới</span>
                 </button>
                 <button id="btn-create-subthread" class="btn-new-chat" style="background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-primary);">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <span>💬 Tạo Phiên Chat Mới</span>
-                </button>
-                <button id="btn-create-chapter" class="btn-new-chat" style="background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-primary);">
-                    <span>📖 Tạo Chương Mới</span>
-                </button>
-            </div>
-
-            <div class="sidebar-tools">
-                <button id="btn-story-mindmap" class="btn-story-tool" type="button">
-                    <span>🕸️</span>
-                    <span><strong>Story Mindmap</strong><small>Xem mạch chương</small></span>
-                </button>
-                <button id="btn-lore-finder" class="btn-story-tool" type="button">
-                    <span>🧠</span>
-                    <span><strong>Smart Lore Finder</strong><small>Tìm ký ức liên quan</small></span>
+                    <span>Tạo Phiên Chat Mới</span>
                 </button>
             </div>
 
@@ -67,45 +53,6 @@
                     </div>
                 </div>
 
-                <!-- Minimal Story Config -->
-                <div id="chapter-config" class="config-section">
-                    <div class="section-title">⚙️ Cấu hình chương hiện tại</div>
-                    
-                    <!-- Hidden Story ID running in background -->
-                    <input type="hidden" id="story-id">
-
-                    <div class="form-group">
-                        <label for="model-select">Mô hình AI</label>
-                        <select id="model-select" required>
-                            <option value="" disabled selected>Đang nạp mô hình...</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="chapter-title">Tiêu đề chương</label>
-                        <input type="text" id="chapter-title" placeholder="Ví dụ: Chương 1: Tỉnh dậy">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="word-count">Số từ mục tiêu</label>
-                        <input type="number" id="word-count" value="1500" min="300" max="8000">
-                    </div>
-
-                    <details class="advanced-details">
-                        <summary class="advanced-summary">Tùy chọn nâng cao <span>⌄</span></summary>
-                        <div class="advanced-content">
-                            <div class="form-group">
-                                <label for="chapter-tone-override">Giọng văn riêng cho chương</label>
-                                <input type="text" id="chapter-tone-override" placeholder="Bỏ trống để dùng giọng mặc định">
-                            </div>
-                            <div class="form-group">
-                                <label for="constraints-list">Ràng buộc đặc biệt</label>
-                                <textarea id="constraints-list" rows="2" placeholder="Ví dụ: Kết thúc bằng cliffhanger..."></textarea>
-                            </div>
-                        </div>
-                    </details>
-                </div>
-
                 <!-- Recent Chapters History for Selected Story -->
                 <div class="history-section">
                     <div class="section-title">📖 Chương gần đây</div>
@@ -113,12 +60,67 @@
                         <!-- Chapters Render Here -->
                     </div>
                     <button id="btn-chapter-archive" class="chapter-archive-button hidden" type="button">
-                        Kho chương
+                        📚 Kho chương & Smart Lore
                     </button>
                 </div>
             </div>
 
             <div class="sidebar-footer">
+                <!-- Account Popover Menu (Upward) -->
+                <div id="account-popover-menu" class="account-popover-menu hidden" role="menu" aria-label="Menu tài khoản">
+                    <div class="account-popover-header">
+                        <div id="menu-avatar-badge" class="account-avatar-badge">TG</div>
+                        <div class="account-header-info">
+                            <div id="menu-name-display" class="account-name">Tác giả</div>
+                            <div id="menu-email-display" class="account-email">tacgia@example.com</div>
+                            <span class="account-tier-badge">Gói Miễn Phí</span>
+                        </div>
+                    </div>
+                    <div class="account-menu-divider"></div>
+                    <button class="account-menu-item" type="button" role="menuitem">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <span>Hồ sơ & Cài đặt</span>
+                    </button>
+                    <button class="account-menu-item" type="button" role="menuitem">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-1-1l-2 2M3 21l9-9m0 0l3-3m-3 3l-3 3m6-6l2-2a3 3 0 1 0-4.24-4.24l-2 2"/></svg>
+                        <span>Quản lý API Key</span>
+                        <span class="account-item-tag">Sắp ra mắt</span>
+                    </button>
+                    <button class="account-menu-item" type="button" role="menuitem">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        <span>Gói cước & Hạn mức</span>
+                        <span class="account-item-tag">Mở rộng</span>
+                    </button>
+                    <div class="account-menu-divider"></div>
+                    <button id="btn-menu-logout" class="account-menu-item account-menu-logout" type="button" role="menuitem">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        <span>Đăng xuất</span>
+                    </button>
+                </div>
+
+                <!-- Unauthenticated / Guest View -->
+                <div id="sidebar-auth-guest" class="sidebar-auth-guest">
+                    <div class="auth-guest-info">
+                        <div class="guest-avatar">👤</div>
+                        <div class="guest-text">Đăng nhập để lưu và đồng bộ truyện</div>
+                    </div>
+                    <button id="btn-sidebar-login" class="btn-sidebar-login" type="button">
+                        <span>Đăng nhập</span>
+                    </button>
+                </div>
+
+                <!-- Authenticated User Card -->
+                <div id="sidebar-auth-user" class="sidebar-auth-user hidden" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
+                    <div id="user-avatar-badge" class="user-avatar-badge">TG</div>
+                    <div class="user-info-text">
+                        <div id="user-name-display" class="user-display-name">Tác giả</div>
+                        <div id="user-email-display" class="user-display-email">tacgia@example.com</div>
+                    </div>
+                    <button id="btn-account-menu-toggle" class="btn-account-toggle" type="button" aria-label="Mở menu tài khoản">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+                    </button>
+                </div>
+
                 <div class="system-status">
                     <span class="status-indicator online"></span>
                     <span class="status-text">Engine Online</span>
@@ -137,9 +139,10 @@
                     <div class="active-chapter-info">
                         <span id="active-story-name" class="active-story-text">Truyện 1</span>
                         <span class="divider">•</span>
-                        <span id="active-title" class="active-title-text">Chương mới</span>
+                        <span id="active-title" class="active-title-text">Chọn phiên chat</span>
                         <span id="active-model-badge" class="model-badge">gemini-2.0-flash</span>
                         <nav id="chapter-navigation" class="chapter-navigation hidden" aria-label="Điều hướng chương">
+                            <button id="btn-back-to-chat" class="hidden" type="button">💬 Chat gốc</button>
                             <button id="btn-previous-chapter" type="button">← Chương trước</button>
                             <button id="btn-next-chapter" type="button">Chương sau →</button>
                         </nav>
@@ -168,9 +171,9 @@
             <div id="chat-scroll-feed" class="chat-feed">
                 <!-- Welcome Banner when idle -->
                 <div id="welcome-container" class="welcome-box">
-                    <div class="welcome-icon">✍️</div>
-                    <h2>Trợ lý Viết Truyện Dài Tập AI</h2>
-                    <p>Tạo hoặc chọn bộ truyện bên Sidebar, dán Đề cương Tổng quát và bắt đầu sáng tác.</p>
+                    <div class="welcome-icon">💬</div>
+                    <h2>Bắt đầu từ cuộc trò chuyện</h2>
+                    <p>Tạo hoặc chọn một phiên chat, phát triển ý tưởng rồi bấm “Viết thành chương” khi đã chốt phương án.</p>
                 </div>
 
                 <div id="chat-thread" class="chat-thread hidden" aria-live="polite"></div>
@@ -304,13 +307,42 @@
                 <form id="generation-form" class="chat-input-form">
                     <div class="textarea-wrapper">
                         <textarea id="user-prompt" class="chat-textarea" rows="2" minlength="5" maxlength="5000" placeholder="Nhập yêu cầu hoặc nội dung trao đổi... (Enter để gửi, Shift+Enter để xuống dòng)" required></textarea>
+                        <div id="dictation-listening" class="dictation-listening" hidden aria-hidden="true">
+                            <span class="dictation-live-dot"></span>
+                            <strong>Đang nghe</strong>
+                            <span class="dictation-wave" aria-hidden="true">
+                                <i></i><i></i><i></i><i></i><i></i>
+                            </span>
+                            <time id="dictation-elapsed">0:00</time>
+                        </div>
+                        <div class="dictation-controls">
+                            <button type="button" id="btn-dictate" class="btn-dictate" aria-label="Bắt đầu nhập bằng giọng nói" aria-pressed="false" title="Nhập bằng giọng nói">
+                                <svg class="dictation-mic-icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+                                    <path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"></path>
+                                </svg>
+                                <svg class="dictation-stop-icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                    <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                                </svg>
+                            </button>
+                            <button type="button" id="btn-cancel-dictation" class="btn-cancel-dictation" hidden>Hủy</button>
+                        </div>
                         <button type="submit" id="btn-generate" class="btn-send" title="Gửi yêu cầu tới AI Engine">
                             <span class="send-icon">✨</span>
                             <span id="send-text" class="send-text">Gửi yêu cầu</span>
                         </button>
                     </div>
                     <div class="input-footer">
-                        <span class="hint-text">💡 <strong>Mẹo keyboard:</strong> Bấm <strong>Enter</strong> để gửi nhanh, bấm <strong>Shift + Enter</strong> để xuống dòng.</span>
+                        <div>
+                            <span id="dictation-status" class="dictation-status" role="status" aria-live="polite"></span>
+                            <span class="hint-text">💡 <strong>Mẹo keyboard:</strong> Bấm <strong>Enter</strong> để gửi nhanh, bấm <strong>Shift + Enter</strong> để xuống dòng.</span>
+                        </div>
+                        <label class="chat-model-picker" for="model-select">
+                            <span>Mô hình</span>
+                            <select id="model-select" required>
+                                <option value="" disabled selected>Đang nạp...</option>
+                            </select>
+                        </label>
                     </div>
                 </form>
             </div>
@@ -380,7 +412,10 @@
                     <span class="dialog-eyebrow">Thư viện bộ truyện</span>
                     <h2 id="chapter-archive-title">Kho chương</h2>
                 </div>
-                <button id="btn-close-chapter-archive" class="dialog-close" type="button" aria-label="Đóng">×</button>
+                <div class="story-dialog-header-actions">
+                    <button id="btn-lore-finder" class="dialog-tool" type="button">🧠 Tìm lore</button>
+                    <button id="btn-close-chapter-archive" class="dialog-close" type="button" aria-label="Đóng">×</button>
+                </div>
             </header>
             <div class="chapter-archive-toolbar">
                 <input id="chapter-archive-search" type="search" placeholder="Tìm theo số hoặc tên chương..." aria-label="Tìm chương">
@@ -394,19 +429,6 @@
             <footer class="chapter-archive-footer">
                 <button id="btn-load-more-chapters" type="button">Xem thêm</button>
             </footer>
-        </div>
-    </dialog>
-
-    <dialog id="story-mindmap-dialog" class="story-dialog" aria-labelledby="mindmap-title">
-        <div class="story-dialog-panel">
-            <header class="story-dialog-header">
-                <div>
-                    <span class="dialog-eyebrow">Story Explorer</span>
-                    <h2 id="mindmap-title">Story Mindmap</h2>
-                </div>
-                <button id="btn-close-mindmap" class="dialog-close" type="button" aria-label="Đóng">×</button>
-            </header>
-            <div id="story-mindmap-content" class="mindmap-canvas"></div>
         </div>
     </dialog>
 
@@ -430,20 +452,245 @@
         </div>
     </dialog>
 
+    <!-- AUTH DIALOG (MODAL ĐĂNG NHẬP / ĐĂNG KÝ) -->
+    <dialog id="auth-dialog" class="story-dialog auth-dialog" aria-labelledby="auth-dialog-title" aria-modal="true">
+        <div id="auth-dialog-panel" class="story-dialog-panel auth-dialog-panel">
+            <div class="mobile-sheet-drag-handle" aria-hidden="true"></div>
+            <header class="story-dialog-header auth-dialog-header">
+                <div>
+                    <span id="auth-dialog-eyebrow" class="dialog-eyebrow">✨ AI Story Engine v3.0</span>
+                    <h2 id="auth-dialog-title">Đăng nhập vào AI Story Engine</h2>
+                    <p id="auth-dialog-desc" class="auth-dialog-desc">Tiếp tục hành trình sáng tác cùng trợ lý AI của bạn</p>
+                </div>
+                <button id="btn-close-auth-dialog" class="dialog-close" type="button" aria-label="Đóng hộp thoại">×</button>
+            </header>
+
+            <!-- Global Alert Banner (Network Error, Form Error, Info) -->
+            <div id="auth-global-alert" class="auth-alert hidden" role="alert" aria-live="polite"></div>
+
+            <!-- OAuth Section -->
+            <div id="auth-section-oauth" class="auth-oauth-container">
+                <button id="btn-auth-google" class="btn-oauth-google" type="button">
+                    <svg class="google-logo" width="18" height="18" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span id="btn-auth-google-text">Tiếp tục với Google</span>
+                    <span id="btn-auth-google-spinner" class="auth-btn-spinner hidden"></span>
+                </button>
+            </div>
+
+            <!-- Divider -->
+            <div id="auth-section-divider" class="auth-divider">
+                <span>hoặc tiếp tục với email</span>
+            </div>
+
+            <!-- Segmented Control Tabs -->
+            <div id="auth-tabs" class="auth-tabs-container" role="tablist" aria-label="Phương thức xác thực">
+                <button id="tab-auth-login" class="auth-tab-btn active" type="button" role="tab" aria-selected="true" aria-controls="auth-section-login">
+                    Đăng nhập
+                </button>
+                <button id="tab-auth-register" class="auth-tab-btn" type="button" role="tab" aria-selected="false" aria-controls="auth-section-register">
+                    Đăng ký
+                </button>
+            </div>
+
+            <!-- 1. LOGIN FORM -->
+            <div id="auth-section-login" class="auth-form-section" role="tabpanel" aria-labelledby="tab-auth-login">
+                <form id="form-auth-login" class="story-dialog-form auth-form" novalidate>
+                    <div class="form-group">
+                        <label for="auth-login-email" class="dialog-label">
+                            <span>Email <span class="required-mark">*</span></span>
+                        </label>
+                        <input id="auth-login-email" class="dialog-input" type="email" autocomplete="username" placeholder="tacgia@example.com" required>
+                        <div id="auth-login-email-error" class="field-error-msg hidden" role="alert"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="auth-login-password" class="dialog-label">
+                            <span>Mật khẩu <span class="required-mark">*</span></span>
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input id="auth-login-password" class="dialog-input" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu của bạn" required>
+                            <button id="auth-login-password-toggle" class="btn-toggle-password" type="button" aria-label="Hiện mật khẩu" title="Hiện mật khẩu">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                        <div id="auth-login-password-error" class="field-error-msg hidden" role="alert"></div>
+                    </div>
+
+                    <div class="auth-form-options">
+                        <label class="auth-checkbox-label">
+                            <input id="auth-login-remember" type="checkbox" checked>
+                            <span>Ghi nhớ đăng nhập</span>
+                        </label>
+                        <button id="btn-link-forgot-password" class="auth-link-btn" type="button">Quên mật khẩu?</button>
+                    </div>
+
+                    <button id="btn-auth-login-submit" class="btn-auth-primary" type="submit">
+                        <span id="btn-auth-login-text">Đăng nhập</span>
+                        <span id="btn-auth-login-spinner" class="auth-btn-spinner hidden"></span>
+                    </button>
+
+                    <div class="auth-switch-footer">
+                        <span>Chưa có tài khoản tác giả?</span>
+                        <button id="btn-link-goto-register" class="auth-link-strong" type="button">Đăng ký ngay</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 2. REGISTER FORM -->
+            <div id="auth-section-register" class="auth-form-section hidden" role="tabpanel" aria-labelledby="tab-auth-register">
+                <form id="form-auth-register" class="story-dialog-form auth-form" novalidate>
+                    <div class="form-group">
+                        <label for="auth-register-name" class="dialog-label">
+                            <span>Bút danh / Tên hiển thị <span class="required-mark">*</span></span>
+                        </label>
+                        <input id="auth-register-name" class="dialog-input" type="text" autocomplete="name" placeholder="Ví dụ: Nam Cao, Tuệ Lâm..." required>
+                        <div id="auth-register-name-error" class="field-error-msg hidden" role="alert"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="auth-register-email" class="dialog-label">
+                            <span>Email <span class="required-mark">*</span></span>
+                        </label>
+                        <input id="auth-register-email" class="dialog-input" type="email" autocomplete="email" placeholder="tacgia@example.com" required>
+                        <div id="auth-register-email-error" class="field-error-msg hidden" role="alert"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="auth-register-password" class="dialog-label">
+                            <span>Tạo mật khẩu <span class="required-mark">*</span></span>
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input id="auth-register-password" class="dialog-input" type="password" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự" required>
+                            <button id="auth-register-password-toggle" class="btn-toggle-password" type="button" aria-label="Hiện mật khẩu" title="Hiện mật khẩu">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                        <div class="password-requirements-bar" aria-label="Tiêu chuẩn mật khẩu">
+                            <span id="pw-req-length" class="pw-req-chip">• Ít nhất 8 ký tự</span>
+                            <span id="pw-req-uppercase" class="pw-req-chip">• Chữ in hoa (A-Z)</span>
+                            <span id="pw-req-number" class="pw-req-chip">• Chữ số (0-9)</span>
+                        </div>
+                        <div id="auth-register-password-error" class="field-error-msg hidden" role="alert"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="auth-register-confirm-password" class="dialog-label">
+                            <span>Xác nhận mật khẩu <span class="required-mark">*</span></span>
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input id="auth-register-confirm-password" class="dialog-input" type="password" autocomplete="new-password" placeholder="Nhập lại mật khẩu vừa tạo" required>
+                            <button id="auth-register-confirm-toggle" class="btn-toggle-password" type="button" aria-label="Hiện mật khẩu" title="Hiện mật khẩu">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                        <div id="auth-register-confirm-error" class="field-error-msg hidden" role="alert"></div>
+                    </div>
+
+                    <div class="form-group terms-group">
+                        <label class="auth-checkbox-label">
+                            <input id="auth-register-terms" type="checkbox" required>
+                            <span>Tôi đồng ý với <a href="#" class="auth-legal-link">Điều khoản sử dụng</a> và <a href="#" class="auth-legal-link">Chính sách bảo mật</a> của AI Story Engine.</span>
+                        </label>
+                        <div id="auth-register-terms-error" class="field-error-msg hidden" role="alert"></div>
+                    </div>
+
+                    <button id="btn-auth-register-submit" class="btn-auth-primary" type="submit">
+                        <span id="btn-auth-register-text">Tạo tài khoản</span>
+                        <span id="btn-auth-register-spinner" class="auth-btn-spinner hidden"></span>
+                    </button>
+
+                    <div class="auth-switch-footer">
+                        <span>Đã có tài khoản tác giả?</span>
+                        <button id="btn-link-goto-login" class="auth-link-strong" type="button">Đăng nhập ngay</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 3. FORGOT PASSWORD FORM -->
+            <div id="auth-section-forgot" class="auth-form-section hidden">
+                <form id="form-auth-forgot" class="story-dialog-form auth-form" novalidate>
+                    <div class="form-group">
+                        <label for="auth-forgot-email" class="dialog-label">
+                            <span>Email đã đăng ký <span class="required-mark">*</span></span>
+                        </label>
+                        <input id="auth-forgot-email" class="dialog-input" type="email" autocomplete="email" placeholder="tacgia@example.com" required>
+                        <div id="auth-forgot-email-error" class="field-error-msg hidden" role="alert"></div>
+                    </div>
+
+                    <button id="btn-auth-forgot-submit" class="btn-auth-primary" type="submit">
+                        <span id="btn-auth-forgot-text">Gửi liên kết khôi phục</span>
+                        <span id="btn-auth-forgot-spinner" class="auth-btn-spinner hidden"></span>
+                    </button>
+
+                    <div class="auth-switch-footer">
+                        <button id="btn-auth-forgot-back" class="auth-link-back" type="button">
+                            ← Quay lại Đăng nhập
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 4. FORGOT SUCCESS STATE -->
+            <div id="auth-section-forgot-success" class="auth-form-section hidden auth-success-section">
+                <div class="auth-success-icon-box">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
+                <h3 class="auth-success-title">Đã gửi liên kết khôi phục!</h3>
+                <p class="auth-success-desc">
+                    Nếu địa chỉ email <strong id="auth-forgot-success-email">email@example.com</strong> tồn tại trong hệ thống, bạn sẽ nhận được một thư chứa liên kết tạo mật khẩu mới trong giây lát.
+                </p>
+                <p class="auth-success-hint">Vui lòng kiểm tra cả thư mục Spam / Hộp thư rác.</p>
+
+                <button id="btn-auth-forgot-success-back" class="btn-auth-primary" type="button">
+                    Quay lại Đăng nhập
+                </button>
+
+                <div class="auth-resend-row">
+                    <span>Chưa nhận được email?</span>
+                    <button id="btn-auth-forgot-resend" class="auth-link-btn" type="button">
+                        Gửi lại <span id="auth-forgot-resend-timer">(60s)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
     <!-- MVC Frontend Scripts -->
-    <script src="/static/storyRepository.js?v=3.3.1"></script>
-    <script src="/static/storyService.js?v=3.3.1"></script>
-    <script src="/static/storyExplorer.js?v=3.1.3"></script>
-    <script src="/static/storyExporter.js?v=3.1.3"></script>
-    <script src="/static/storyWorkspace.js?v=3.2.3"></script>
+    <script src="/static/authController.js?v=1.0.0"></script>
+    <script src="/static/storyRepository.js?v=3.5.0"></script>
+    <script src="/static/dictationController.js?v=1.4.0"></script>
+    <script src="/static/storyService.js?v=3.4.0"></script>
+    <script src="/static/storyExplorer.js?v=3.1.4"></script>
+    <script src="/static/storyExporter.js?v=3.2.0"></script>
+    <script src="/static/storyWorkspace.js?v=3.4.0"></script>
     <script src="/static/storyAnalysisRenderer.js?v=3.1.4"></script>
-    <script src="/static/storyController.js?v=3.4.1"></script>
+    <script src="/static/storyController.js?v=3.6.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const auth = new AuthController();
+            auth.init();
+            window.authController = auth;
+
             const repository = new StoryRepository();
+            const dictation = new DictationController(repository, {
+                button: document.getElementById('btn-dictate'),
+                cancelButton: document.getElementById('btn-cancel-dictation'),
+                listening: document.getElementById('dictation-listening'),
+                elapsed: document.getElementById('dictation-elapsed'),
+                status: document.getElementById('dictation-status'),
+                input: document.getElementById('user-prompt'),
+                form: document.getElementById('generation-form')
+            });
+            dictation.init();
             const service = new StoryService(repository);
             const controller = new StoryController(service);
             controller.init();
+            window.storyController = controller;
         });
     </script>
 </body>

@@ -1,5 +1,9 @@
 # AI Engine cho hệ thống viết truyện dài tập
 
+**Product stage:** MVP-1
+
+> **Reading order:** Read this product and architecture document first. Before changing code, continue with the WP-00 engineering foundation linked at the end, then read the active work-package specification.
+
 ## 1. Mục tiêu
 
 AI Engine chịu trách nhiệm tạo, tiếp tục, phân tích và chỉnh sửa truyện dài tập dựa trên yêu cầu của người dùng. Engine phải bảo đảm:
@@ -1371,6 +1375,10 @@ ai_revision_attempt_total
 
 ## 15. Cấu trúc source code đề xuất
 
+**Status: PROPOSED REFERENCE STRUCTURE.** Cây bên dưới mô tả hướng tổ chức, không khẳng định mọi module đã tồn tại.
+
+**CURRENT repository roots:** `AI_engine/app`, `AI_engine/tests`, `API/static`, `API/tests`.
+
 ```text
 app/
 ├── api/
@@ -1437,10 +1445,26 @@ MVP nên gồm:
 Sau MVP mới bổ sung:
 
 - Automatic model routing.
-- Cost optimization.
+- Evidence-backed performance optimization: WP-00 policy áp dụng ngay; thay đổi hiệu năng chỉ được triển khai sau khi có baseline và bottleneck được đo.
 - Multi-agent debate.
 - Advanced reranking.
 - Fine-tuned style model.
 - Collaborative editing.
 - Branching storyline.
 - Automatic plot graph.
+
+## 17. WP-00 — Engineering foundation
+
+WP-00 governs how MVP-1 and later work packages are changed and verified. It does not replace the product or functional architecture described above.
+
+- CURRENT describes repository facts verified by audit.
+- PROPOSED describes selected design not yet implemented.
+- DEFERRED describes work blocked on evidence or a separate decision.
+
+Detailed rules:
+
+- [WP-00 specification](docs/roadmap/WP-00_ENGINEERING_QUALITY_STANDARD.md)
+- [Code quality](docs/engineering/code-quality.md)
+- [Performance optimization](docs/engineering/performance.md)
+
+Approval of documentation does not authorize dependency installation, formatting, refactoring, schema changes, CI or runtime changes.

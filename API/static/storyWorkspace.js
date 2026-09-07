@@ -12,48 +12,45 @@ class StoryWorkspace {
         this.recentChapterLimit = 15;
     }
 
-    init() {
+    readLegacyStories() {
         const raw = localStorage.getItem('ai_story_workspace');
-        if (raw) {
-            try {
-                this.stories = JSON.parse(raw);
-            } catch (e) {
-                this.stories = [];
-            }
+        if (!raw) return [];
+        try {
+            const stories = JSON.parse(raw);
+            if (!Array.isArray(stories)) return [];
+            return stories
+                .filter(story => story?.id && story?.title)
+                .map(story => ({
+                    id: story.id,
+                    title: story.title,
+                    masterTone: story.masterTone || '',
+                    masterOutline: story.masterOutline || '',
+                    createdAt: story.createdAt || null,
+                    archivedAt: story.archivedAt || null
+                }));
+        } catch (error) {
+            return [];
         }
+    }
 
-        if (this.stories && this.stories.length > 0) {
-            this.stories.forEach(s => {
-                s.chapters = s.chapters || [];
-                s.subthreads = s.subthreads || [];
-            });
-        } else {
-            const defaultStory = {
-                id: crypto.randomUUID(),
-                title: "Truyện 1",
-                masterTone: "Thô mộc, đời thực, bộc trực, không dùng từ ngữ sến sẩm AI",
-                masterOutline: "",
-                createdAt: new Date().toISOString(),
-                chapters: [],
-                subthreads: []
-            };
-            this.stories = [defaultStory];
-            this.saveState();
-        }
+    clearLegacyStories() {
+        localStorage.removeItem('ai_story_workspace');
+    }
 
+    init(stories = []) {
+        this.stories = stories.map(story => ({
+            ...story,
+            chapters: story.chapters || [],
+            subthreads: story.subthreads || [],
+            deletedChapterSources: story.deletedChapterSources || []
+        }));
+        if (!this.stories.length) return null;
         const firstActiveStory = this.stories.find(story => !story.archivedAt) || this.stories[0];
-        delete firstActiveStory.archivedAt;
-        this.selectStory(firstActiveStory.id);
+        return this.selectStory(firstActiveStory.id);
     }
 
     saveState() {
-        const persistedStories = this.stories.map(story => ({
-            ...story,
-            chapters: (story.chapters || []).map((chapter, index) =>
-                index < this.recentChapterLimit ? chapter : { ...chapter, content: undefined }
-            )
-        }));
-        localStorage.setItem('ai_story_workspace', JSON.stringify(persistedStories));
+        // PostgreSQL is the only persistence layer for story domain data.
     }
 
     getActiveStory() {
@@ -74,15 +71,12 @@ class StoryWorkspace {
         return 'new-chapter';
     }
 
-    createStory(title, masterTone = '', masterOutline = '') {
+    createStory(story) {
         const newStory = {
-            id: crypto.randomUUID(),
-            title: title || `Truyện ${this.stories.length + 1}`,
-            masterTone: masterTone || "Thô mộc, đời thực, bộc trực",
-            masterOutline: masterOutline || "",
-            createdAt: new Date().toISOString(),
+            ...story,
             chapters: [],
-            subthreads: []
+            subthreads: [],
+            deletedChapterSources: []
         };
         this.stories.unshift(newStory);
         this.saveState();
@@ -151,18 +145,68 @@ class StoryWorkspace {
         return this.stories.find(story => story.id === storyId)?.subthreads?.find(thread => thread.id === threadId) || null;
     }
 
-    addSubthreadMessage(threadId, role, content, storyId = this.currentStoryId) {
+    addSubthreadMessage(threadId, role, content, storyId = this.currentStoryId, metadata = {}) {
         const thread = this.getSubthread(threadId, storyId);
         if (!thread) return;
-        thread.messages.push({ role, content });
+        thread.messages.push({ role, content, ...metadata });
         this.saveState();
     }
 
     replaceSubthreads(storyId, subthreads) {
         const story = this.stories.find(item => item.id === storyId);
         if (!story) return;
-        story.subthreads = subthreads;
+        const localThreads = story.subthreads || [];
+        story.subthreads = subthreads.map(thread => {
+            const local = localThreads.find(item => item.id === thread.id);
+            return {
+                ...local,
+                ...thread,
+                messages: thread.messages.map((message, index) => ({
+                    ...local?.messages?.[index],
+                    ...message,
+                })),
+            };
+        });
+        this.reconcileChapterLinks(storyId);
         this.saveState();
+    }
+
+    replaceChapters(storyId, chapters, deletedSources = []) {
+        const story = this.stories.find(item => item.id === storyId);
+        if (!story) return;
+        story.chapters = chapters;
+        story.deletedChapterSources = deletedSources;
+        this.reconcileChapterLinks(storyId);
+    }
+
+    reconcileChapterLinks(storyId = this.currentStoryId) {
+        const story = this.stories.find(item => item.id === storyId);
+        if (!story) return;
+        (story.chapters || []).forEach(chapter => {
+            const thread = story.subthreads?.find(item => item.id === chapter.sourceThreadId);
+            const message = thread?.messages?.[Number(chapter.sourceMessageIndex)];
+            if (!message || message.role !== 'assistant') return;
+            Object.assign(message, {
+                kind: 'chapter-draft',
+                chapterId: chapter.chapterId,
+                versionId: chapter.versionId,
+                title: chapter.title,
+                model: chapter.model,
+                status: chapter.status
+            });
+        });
+        (story.deletedChapterSources || []).forEach(source => {
+            const thread = story.subthreads?.find(item => item.id === source.sourceThreadId);
+            const message = thread?.messages?.[Number(source.sourceMessageIndex)];
+            if (!message || message.role !== 'assistant') return;
+            Object.assign(message, {
+                kind: 'chapter-draft',
+                chapterId: source.chapterId,
+                status: 'DELETED',
+                chapterDeleted: true
+            });
+            delete message.versionId;
+        });
     }
 
     deleteSubthread(threadId) {
@@ -176,12 +220,11 @@ class StoryWorkspace {
         return true;
     }
 
-    getIdeationContext(maxChars = 8000) {
-        const lines = this.getActiveStory()?.subthreads?.flatMap(thread => [
-            `[Chat: ${thread.title}]`,
-            ...thread.messages.map(message => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`)
-        ]) || [];
-        return lines.join('\n').slice(-maxChars);
+    getThreadContext(threadId = this.currentSubthreadId, maxChars = 8000) {
+        const messages = this.getSubthread(threadId)?.messages || [];
+        return messages.slice(-20).map(message =>
+            `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`
+        ).join('\n').slice(-maxChars);
     }
 
     saveChapterToCurrentStory(chapterData, storyId = this.currentStoryId) {
@@ -203,7 +246,22 @@ class StoryWorkspace {
         if (!activeStory) return false;
         const originalLength = activeStory.chapters.length;
         activeStory.chapters = activeStory.chapters.filter(chapter => chapter.chapterId !== chapterId);
-        if (activeStory.chapters.length === originalLength) return false;
+
+        if (activeStory.subthreads) {
+            activeStory.subthreads.forEach(thread => {
+                if (thread.messages) {
+                    thread.messages.forEach(msg => {
+                        if (msg.chapterId === chapterId) {
+                            delete msg.versionId;
+                            msg.status = 'DELETED';
+                            msg.chapterDeleted = true;
+                            delete msg.superseded;
+                        }
+                    });
+                }
+            });
+        }
+
         if (this.currentChapterId === chapterId) {
             this.currentChapterId = null;
             this.currentVersionId = null;
@@ -251,7 +309,7 @@ class StoryWorkspace {
             
             const badge = document.createElement('div');
             badge.className = 'story-badge';
-            badge.innerText = `${s.chapters ? s.chapters.length : 0} chương`;
+            badge.innerText = `${s.chapters?.length || s.chapterCount || 0} chương`;
 
             const archiveButton = document.createElement('button');
             archiveButton.type = 'button';
@@ -288,7 +346,7 @@ class StoryWorkspace {
             const title = document.createElement('strong');
             title.textContent = story.title;
             const meta = document.createElement('small');
-            meta.textContent = `${story.chapters?.length || 0} chương · ${story.subthreads?.length || 0} phiên chat`;
+            meta.textContent = `${story.chapters?.length || story.chapterCount || 0} chương · ${story.subthreads?.length || story.chatCount || 0} phiên chat`;
             info.append(title, meta);
             const restoreButton = document.createElement('button');
             restoreButton.type = 'button';

@@ -5,7 +5,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_PASSWORD: Quocviet160423
       POSTGRES_DB: ai_story_db
     ports:
       - "5433:5432"
@@ -26,7 +26,7 @@ services:
     container_name: ai_story_web_wrapper
     restart: always
     environment:
-      - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/ai_story_db
+      - DATABASE_URL=postgresql://postgres:Quocviet160423@db:5432/ai_story_db
       - REDIS_URL=redis://redis:6379/0
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}

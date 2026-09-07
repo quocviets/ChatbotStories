@@ -7,8 +7,16 @@ class StoryRepository {
         this.apiBase = apiBase;
     }
 
-    async #request(path, errorMessage, options, readErrorDetail = false) {
-        const response = await fetch(`${this.apiBase}${path}`, options);
+    #identityHeaders() {
+        return {
+            'X-Tenant-Id': 'tenant_web_01',
+            'X-User-Id': 'user_web_01'
+        };
+    }
+
+    async #request(path, errorMessage, options = {}, readErrorDetail = false) {
+        const fetchOptions = { credentials: 'same-origin', ...options };
+        const response = await fetch(`${this.apiBase}${path}`, fetchOptions);
         if (!response.ok) {
             let detail;
             if (readErrorDetail) {
@@ -40,6 +48,53 @@ class StoryRepository {
         return this.#request('/models', 'Failed to fetch models');
     }
 
+    async transcribe(blob) {
+        return this.#request('/transcriptions', 'Chuyển giọng nói thất bại', {
+            method: 'POST',
+            headers: { 'Content-Type': blob.type },
+            body: blob
+        }, true);
+    }
+
+    async getStories() {
+        return this.#request('/stories', 'Load stories failed', {
+            headers: this.#identityHeaders()
+        }, true);
+    }
+
+    async createStory(payload) {
+        return this.#write(
+            '/stories',
+            'Create story failed',
+            'POST',
+            payload,
+            this.#identityHeaders(),
+            true
+        );
+    }
+
+    async importLegacyStories(stories) {
+        return this.#write(
+            '/stories/import',
+            'Import legacy stories failed',
+            'POST',
+            { stories },
+            this.#identityHeaders(),
+            true
+        );
+    }
+
+    async updateStory(storyId, payload) {
+        return this.#write(
+            `/stories/${storyId}`,
+            'Update story failed',
+            'PATCH',
+            payload,
+            this.#identityHeaders(),
+            true
+        );
+    }
+
     async searchLore(storyId, query, limit = 8) {
         const params = new URLSearchParams({ query, limit });
         return this.#request(`/stories/${storyId}/lore/search?${params}`, 'Lore search failed', undefined, true);
@@ -58,7 +113,10 @@ class StoryRepository {
             `/stories/${storyId}/chats/${thread.id}`,
             'Save chat failed',
             'PUT',
-            { title: thread.title, messages: thread.messages },
+            {
+                title: thread.title,
+                messages: thread.messages.map(({ role, content }) => ({ role, content }))
+            },
             {},
             true
         );
@@ -76,6 +134,10 @@ class StoryRepository {
         }, true);
     }
 
+    async getChapters(storyId) {
+        return this.#request(`/stories/${storyId}/chapters`, 'Load chapters failed', undefined, true);
+    }
+
     async renameChapter(storyId, chapterId, title) {
         return this.#write(
             `/stories/${storyId}/chapters/${chapterId}`,
@@ -89,21 +151,6 @@ class StoryRepository {
 
     async getChapter(storyId, chapterId) {
         return this.#request(`/stories/${storyId}/chapters/${chapterId}`, 'Load chapter failed', undefined, true);
-    }
-
-    async exportChatChapter(storyId, payload) {
-        return this.#write(
-            `/stories/${storyId}/chapters/from-chat`,
-            'Export chat chapter failed',
-            'POST',
-            payload,
-            {
-                'Idempotency-Key': `chat_${payload.thread_id}_${payload.message_index}`,
-                'X-Tenant-Id': 'tenant_web_01',
-                'X-User-Id': 'user_web_01'
-            },
-            true
-        );
     }
 
     /**

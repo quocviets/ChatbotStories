@@ -1,0 +1,62 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: ✨
+      - generic [ref=e7]: AI Story Engine
+      - generic [ref=e8]: v3.0
+    - generic [ref=e9]:
+      - button "➕ Tạo Truyện Mới" [ref=e10] [cursor=pointer]
+      - button "💬 Tạo Phiên Chat Mới" [ref=e13] [cursor=pointer]
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]: 📚 Danh sách Bộ Truyện
+        - generic [ref=e21] [cursor=pointer]:
+          - generic [ref=e22]: Truyện 1
+          - generic [ref=e23]: 0 chương
+          - button "Lưu trữ Truyện 1" [ref=e24]: 📦
+      - generic [ref=e25]:
+        - generic [ref=e26]: 💬 Phiên Chat Thảo Luận / Thử Nghiệm
+        - generic [ref=e27]: Chưa có phiên chat thử nghiệm nào.
+      - generic [ref=e29]:
+        - generic [ref=e30]: 📖 Chương gần đây
+        - generic [ref=e31]: Chưa có chương nào trong bộ truyện này.
+    - generic [ref=e33]: Engine Online
+  - main [ref=e37]:
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - button "Đóng/Mở Sidebar" [active] [ref=e40] [cursor=pointer]
+        - generic [ref=e42]:
+          - generic [ref=e43]: Truyện 1
+          - generic [ref=e44]: •
+          - generic [ref=e45]: Chọn phiên chat
+          - generic [ref=e46]: gemini-2.0-flash
+      - button "Chuyển sang chế độ sáng" [ref=e72] [cursor=pointer]:
+        - generic [ref=e49]: 🌙
+        - generic [ref=e50]: Tối
+    - generic [ref=e51]:
+      - generic [ref=e52]:
+        - generic [ref=e53]: 💬
+        - heading "Bắt đầu từ cuộc trò chuyện" [level=2] [ref=e54]
+        - paragraph [ref=e55]: Tạo hoặc chọn một phiên chat, phát triển ý tưởng rồi bấm “Viết thành chương” khi đã chốt phương án.
+      - text: Nội dung chương truyện sinh bởi AI sẽ hiển thị hoặc chỉnh sửa trực tiếp tại đây...
+    - generic [ref=e57]:
+      - generic [ref=e58]:
+        - textbox "Nhập nội dung trao đổi... (Enter để gửi, Shift+Enter để xuống dòng)" [ref=e59]
+        - button "✨ Gửi yêu cầu" [ref=e60] [cursor=pointer]:
+          - generic [ref=e61]: ✨
+          - generic [ref=e62]: Gửi yêu cầu
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - text: 💡
+          - strong [ref=e65]: "Mẹo keyboard:"
+          - text: Bấm
+          - strong [ref=e66]: Enter
+          - text: để gửi nhanh, bấm
+          - strong [ref=e67]: Shift + Enter
+          - text: để xuống dòng.
+        - generic [ref=e68]:
+          - generic [ref=e69]: Mô hình
+          - combobox "Mô hình" [ref=e70]:
+            - option "claude-sonnet (anthropic)"
+            - option "gpt-writing (openai)"
+            - option "gemini-long-context (google)" [selected]

@@ -1,38 +1,4 @@
 const StoryExplorer = {
-    renderMindmap(container, story, onChapterClick) {
-        container.replaceChildren();
-
-        const root = document.createElement('div');
-        root.className = 'mindmap-root';
-        root.textContent = story.title;
-        container.appendChild(root);
-
-        const branches = document.createElement('div');
-        branches.className = 'mindmap-branches';
-        container.appendChild(branches);
-
-        if (!story.chapters?.length) {
-            branches.innerHTML = '<p class="story-tool-empty">Chưa có chương nào để hiển thị.</p>';
-            return;
-        }
-
-        story.chapters.forEach((chapter, index) => {
-            const node = document.createElement('button');
-            node.type = 'button';
-            node.className = 'mindmap-node';
-
-            const title = document.createElement('strong');
-            title.textContent = chapter.title || `Chương ${index + 1}`;
-            const words = (chapter.content || '').trim().split(/\s+/).filter(Boolean).length;
-            const meta = document.createElement('small');
-            meta.textContent = `Chương ${index + 1} · ${words} từ`;
-
-            node.append(title, meta);
-            node.addEventListener('click', () => onChapterClick(chapter));
-            branches.appendChild(node);
-        });
-    },
-
     renderLoreResults(container, memories) {
         container.replaceChildren();
         if (!memories.length) {

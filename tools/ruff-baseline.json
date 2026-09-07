@@ -1,0 +1,44 @@
+{
+  "ruff_version": "0.16.5",
+  "targets": [
+    "AI_engine/app",
+    "AI_engine/tests",
+    "API/main.py",
+    "tools"
+  ],
+  "files": [
+    "AI_engine/app/__init__.py",
+    "AI_engine/app/api/v1/job_router.py",
+    "AI_engine/app/api/v1/model_router.py",
+    "AI_engine/app/api/v1/responses.py",
+    "AI_engine/app/api/v1/story_analysis_router.py",
+    "AI_engine/app/api/v1/story_generation_router.py",
+    "AI_engine/app/application/commands/story_commands.py",
+    "AI_engine/app/application/dto/story_dtos.py",
+    "AI_engine/app/application/orchestrators/story_generation_orchestrator.py",
+    "AI_engine/app/config.py",
+    "AI_engine/app/domain/exceptions/story_exceptions.py",
+    "AI_engine/app/infrastructure/db/postgres_client.py",
+    "AI_engine/app/infrastructure/llm/llm_gateway.py",
+    "AI_engine/app/infrastructure/llm/providers/anthropic_provider.py",
+    "AI_engine/app/infrastructure/llm/providers/gemini_provider.py",
+    "AI_engine/app/infrastructure/llm/providers/ollama_provider.py",
+    "AI_engine/app/infrastructure/llm/providers/openai_provider.py",
+    "AI_engine/app/infrastructure/redis/redis_client.py",
+    "AI_engine/app/infrastructure/vector_store/pgvector_store.py",
+    "AI_engine/app/main.py",
+    "AI_engine/app/pipeline/analyzer.py",
+    "AI_engine/app/pipeline/memory_manager.py",
+    "AI_engine/app/pipeline/narrative_editor.py",
+    "AI_engine/app/pipeline/planner.py",
+    "AI_engine/app/pipeline/prompt_builder.py",
+    "AI_engine/app/pipeline/retriever.py",
+    "AI_engine/app/workers/generation_worker.py",
+    "AI_engine/tests/test_main.py",
+    "API/main.py",
+    "tools/ruff_gate.py",
+    "tools/test_ruff_gate.py"
+  ],
+  "diagnostics": {
+  }
+}

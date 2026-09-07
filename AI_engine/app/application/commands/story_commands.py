@@ -1,6 +1,8 @@
 from typing import Literal
-from pydantic import BaseModel
+
 from app.application.dto.story_dtos import ChapterOptions, GenerationConfig
+from pydantic import BaseModel
+
 
 class GenerateChapterCommand(BaseModel):
     story_id: str

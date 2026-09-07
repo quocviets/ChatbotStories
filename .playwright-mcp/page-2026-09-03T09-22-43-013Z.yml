@@ -1,0 +1,52 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: ✨
+      - generic [ref=e7]: AI Story Engine
+      - generic [ref=e8]: v3.0
+    - generic [ref=e9]:
+      - button "Tạo Truyện Mới" [ref=e10] [cursor=pointer]
+      - button "Tạo Phiên Chat Mới" [ref=e13] [cursor=pointer]
+    - generic [ref=e17]:
+      - generic [ref=e18]: 📚 Danh sách Bộ Truyện
+      - generic [ref=e20]: 💬 Phiên Chat Thảo Luận / Thử Nghiệm
+      - generic [ref=e22]: 📖 Chương gần đây
+    - generic [ref=e24]: Engine Online
+  - main [ref=e28]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - button "Đóng/Mở Sidebar" [ref=e31] [cursor=pointer]
+        - generic [ref=e33]:
+          - generic [ref=e34]: Truyện 1
+          - generic [ref=e35]: •
+          - generic [ref=e36]: Chọn phiên chat
+          - generic [ref=e37]: gemini-2.0-flash
+      - button "Chuyển sang chế độ sáng" [ref=e39] [cursor=pointer]:
+        - generic [ref=e40]: 🌙
+        - generic [ref=e41]: Tối
+    - generic [ref=e42]:
+      - generic [ref=e43]:
+        - generic [ref=e44]: 💬
+        - heading "Bắt đầu từ cuộc trò chuyện" [level=2] [ref=e45]
+        - paragraph [ref=e46]: Tạo hoặc chọn một phiên chat, phát triển ý tưởng rồi bấm “Viết thành chương” khi đã chốt phương án.
+      - text: Nội dung chương truyện sinh bởi AI sẽ hiển thị hoặc chỉnh sửa trực tiếp tại đây...
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - textbox "Nhập yêu cầu hoặc nội dung trao đổi... (Enter để gửi, Shift+Enter để xuống dòng)" [ref=e50]
+        - button "Bắt đầu nhập bằng giọng nói" [ref=e52] [cursor=pointer]
+        - button "✨ Gửi yêu cầu" [ref=e56] [cursor=pointer]:
+          - generic [ref=e57]: ✨
+          - generic [ref=e58]: Gửi yêu cầu
+      - generic [ref=e59]:
+        - generic [ref=e61]:
+          - text: 💡
+          - strong [ref=e62]: "Mẹo keyboard:"
+          - text: Bấm
+          - strong [ref=e63]: Enter
+          - text: để gửi nhanh, bấm
+          - strong [ref=e64]: Shift + Enter
+          - text: để xuống dòng.
+        - generic [ref=e65]:
+          - generic [ref=e66]: Mô hình
+          - combobox "Mô hình" [ref=e67]:
+            - option "Đang nạp..." [disabled] [selected]

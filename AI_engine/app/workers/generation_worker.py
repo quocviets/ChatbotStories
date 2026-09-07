@@ -1,13 +1,18 @@
 import asyncio
 import logging
 import traceback
-from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
+
 from app.application.commands.story_commands import GenerateChapterCommand
 from app.application.dto.story_dtos import ChapterOptions, GenerationConfig
+from app.application.orchestrators.story_generation_orchestrator import (
+    StoryGenerationOrchestrator,
+    build_orchestrator,
+)
 from app.infrastructure.db.postgres_client import get_job
-from app.infrastructure.redis.redis_client import get_redis
 from app.infrastructure.llm.llm_gateway import LLMGateway
-from app.application.orchestrators.story_generation_orchestrator import StoryGenerationOrchestrator, build_orchestrator
+from app.infrastructure.redis.redis_client import get_redis
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -44,22 +49,22 @@ async def worker_loop():
 
 async def process_enqueued_job(job_id: str, orchestrator: StoryGenerationOrchestrator):
     logger.info(f"Worker dequeued job {job_id} for processing.")
-    
+
     job_db = await get_job(job_id)
     if not job_db:
         logger.error(f"Job {job_id} not found in DB.")
         return
-        
+
     if job_db["status"] == "CANCELLED":
         logger.info(f"Job {job_id} was already cancelled.")
         return
-        
+
     try:
         payload = job_db["request_payload"]
-        
+
         chapter_opts = ChapterOptions(**payload.get("chapter", {}))
         gen_config = GenerationConfig(**payload.get("generation_config", {}))
-        
+
         command = GenerateChapterCommand(
             story_id=str(job_db["story_id"]),
             tenant_id=job_db["tenant_id"],
@@ -71,12 +76,12 @@ async def process_enqueued_job(job_id: str, orchestrator: StoryGenerationOrchest
             chapter=chapter_opts,
             generation_config=gen_config,
             constraints=payload.get("constraints", []),
-            metadata=payload.get("metadata", {})
+            metadata=payload.get("metadata", {}),
         )
-        
+
         await orchestrator.execute(command, job_id)
         logger.info(f"Job {job_id} processed successfully by orchestrator.")
-        
+
     except Exception as e:
         logger.error(f"Orchestrator failed to process job {job_id}: {e}\n{traceback.format_exc()}")
         await orchestrator._fail_job(job_id, f"Processing failure: {str(e)}")

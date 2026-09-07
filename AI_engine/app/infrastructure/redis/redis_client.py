@@ -1,12 +1,12 @@
 import logging
-from typing import Optional
-import redis.asyncio as aioredis
 from urllib.parse import urlsplit
+
+import redis.asyncio as aioredis
 from app.config import REDIS_URL
 
 logger = logging.getLogger(__name__)
 
-redis_client: Optional[aioredis.Redis] = None
+redis_client: aioredis.Redis | None = None
 
 
 async def init_redis():
@@ -14,19 +14,24 @@ async def init_redis():
     global redis_client
     try:
         target = urlsplit(REDIS_URL)
-        logger.info("Connecting to Redis host=%s port=%s db=%s", target.hostname, target.port, target.path.lstrip("/"))
+        logger.info(
+            "Connecting to Redis host=%s port=%s db=%s",
+            target.hostname,
+            target.port,
+            target.path.lstrip("/"),
+        )
         redis_client = aioredis.from_url(
             REDIS_URL,
             decode_responses=True,
             socket_connect_timeout=5,
             socket_timeout=10,
-            health_check_interval=30
+            health_check_interval=30,
         )
         await redis_client.ping()
         logger.info("Redis client connected successfully.")
     except Exception as e:
         logger.error(f"Failed to connect to Redis: {e}")
-        raise e
+        raise
 
 
 async def close_redis():

@@ -2,13 +2,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-let storedWorkspace = '';
+const localWrites = [];
+const removedKeys = [];
 const context = {
     console,
     crypto: { randomUUID: () => 'generated-id' },
     localStorage: {
         getItem: () => null,
-        setItem: (key, value) => { if (key === 'ai_story_workspace') storedWorkspace = value; }
+        setItem: (key, value) => localWrites.push([key, value]),
+        removeItem: key => removedKeys.push(key)
     }
 };
 vm.createContext(context);
@@ -16,6 +18,7 @@ vm.createContext(context);
 vm.runInContext(`${fs.readFileSync('static/storyService.js', 'utf8')}\nglobalThis.StoryService = StoryService;`, context);
 vm.runInContext(`${fs.readFileSync('static/storyWorkspace.js', 'utf8')}\nglobalThis.StoryWorkspace = StoryWorkspace;`, context);
 vm.runInContext(`${fs.readFileSync('static/storyRepository.js', 'utf8')}\nglobalThis.StoryRepository = StoryRepository;`, context);
+vm.runInContext(`${fs.readFileSync('static/storyExporter.js', 'utf8')}\nglobalThis.StoryExporter = StoryExporter;`, context);
 vm.runInContext(`${fs.readFileSync('static/storyController.js', 'utf8')}\nglobalThis.StoryController = StoryController;`, context);
 
 assert.deepEqual(
@@ -25,6 +28,26 @@ assert.deepEqual(
 assert.deepEqual(
     Array.from(context.StoryController.splitBoldText('Dấu ** chưa đóng')),
     ['Dấu ** chưa đóng']
+);
+assert.deepEqual(
+    Array.from(
+        context.StoryController.parseInlineFormatting('– *Trần Mạn nói đúng.* – **Sự thật**'),
+        token => ({ type: token.type, text: token.text })
+    ),
+    [
+        { type: 'text', text: '– ' },
+        { type: 'em', text: 'Trần Mạn nói đúng.' },
+        { type: 'text', text: ' – ' },
+        { type: 'strong', text: 'Sự thật' }
+    ]
+);
+assert.equal(
+    context.StoryExporter.stripMarkdownFormatting('### Chương 7\n\n– *Trần Mạn nói đúng.* – **Sự thật**'),
+    'Chương 7\n\n– Trần Mạn nói đúng. – Sự thật'
+);
+assert.equal(
+    context.StoryExporter.formatInlineMarkdown('*nghiêng* và **đậm**'),
+    '<em>nghiêng</em> và <strong>đậm</strong>'
 );
 
 const completedController = new context.StoryController({});
@@ -46,18 +69,23 @@ completedController.handleGenerationComplete({
 assert.equal(progressHidden, true);
 assert.equal(completedController.dom.btnGenerate.disabled, false);
 
-for (const method of ['chat', 'loadChats', 'saveChatThread', 'deleteChatThread', 'getChapter', 'deleteChapter', 'renameChapter', 'exportChatChapter', 'approveChapter', 'regenerateChapter', 'continueChapter', 'analyzeChapter']) {
+for (const method of ['loadStories', 'importLegacyStories', 'createStory', 'setStoryArchived', 'chat', 'loadChats', 'loadChapters', 'saveChatThread', 'deleteChatThread', 'getChapter', 'deleteChapter', 'renameChapter', 'approveChapter', 'regenerateChapter', 'continueChapter', 'analyzeChapter']) {
     assert.equal(typeof context.StoryService.prototype[method], 'function', `${method} is missing`);
 }
+assert.equal(typeof context.StoryRepository.prototype.getStories, 'function', 'repository.getStories is missing');
+assert.equal(typeof context.StoryRepository.prototype.createStory, 'function', 'repository.createStory is missing');
+assert.equal(typeof context.StoryRepository.prototype.importLegacyStories, 'function', 'repository.importLegacyStories is missing');
+assert.equal(typeof context.StoryRepository.prototype.updateStory, 'function', 'repository.updateStory is missing');
 assert.equal(typeof context.StoryRepository.prototype.chat, 'function', 'repository.chat is missing');
 assert.equal(typeof context.StoryRepository.prototype.getChatThreads, 'function', 'repository.getChatThreads is missing');
 assert.equal(typeof context.StoryRepository.prototype.saveChatThread, 'function', 'repository.saveChatThread is missing');
 assert.equal(typeof context.StoryRepository.prototype.deleteChatThread, 'function', 'repository.deleteChatThread is missing');
 assert.equal(typeof context.StoryRepository.prototype.deleteChapter, 'function', 'repository.deleteChapter is missing');
+assert.equal(typeof context.StoryRepository.prototype.getChapters, 'function', 'repository.getChapters is missing');
 assert.equal(typeof context.StoryRepository.prototype.renameChapter, 'function', 'repository.renameChapter is missing');
 assert.equal(typeof context.StoryRepository.prototype.getChapter, 'function', 'repository.getChapter is missing');
-assert.equal(typeof context.StoryRepository.prototype.exportChatChapter, 'function', 'repository.exportChatChapter is missing');
-assert.equal(typeof context.StoryController.prototype.exportChatMessageAsChapter, 'function', 'exportChatMessageAsChapter is missing');
+assert.equal(typeof context.StoryController.prototype.handleGenerateChapterFromChat, 'function', 'chat pipeline action is missing');
+assert.equal(typeof context.StoryController.prototype.handleApproveChatDraft, 'function', 'chat draft approval is missing');
 
 const workspace = new context.StoryWorkspace();
 workspace.stories = [
@@ -93,19 +121,64 @@ assert.equal(workspace.getChapters({ query: 'chương 22' })[0].chapterId, 'chap
 assert.equal(workspace.getAdjacentChapter('chapter-20', -1).chapterId, 'chapter-19');
 assert.equal(workspace.getAdjacentChapter('chapter-20', 1).chapterId, 'chapter-21');
 workspace.saveState();
-const persistedChapters = JSON.parse(storedWorkspace)[0].chapters;
-assert.equal(persistedChapters[0].content, 'Nội dung 45');
-assert.equal('content' in persistedChapters[15], false);
+assert.equal(
+    localWrites.some(([key]) => key === 'ai_story_workspace'),
+    false,
+    'story domain data must not be written to localStorage'
+);
+
+const staleWorkspace = JSON.stringify([{
+    id: 'story-stale',
+    title: 'Stale',
+    chapters: [{ chapterId: 'hacked-chapter', content: 'untrusted' }],
+    subthreads: [{ id: 'hacked-chat', messages: [{ role: 'assistant', content: 'untrusted' }] }]
+}]);
+context.localStorage.getItem = key => key === 'ai_story_workspace' ? staleWorkspace : null;
+const hydratedWorkspace = new context.StoryWorkspace();
+const legacyStories = hydratedWorkspace.readLegacyStories();
+assert.equal(legacyStories[0].title, 'Stale');
+assert.equal('chapters' in legacyStories[0], false, 'legacy import must exclude chapters');
+assert.equal('subthreads' in legacyStories[0], false, 'legacy import must exclude chats');
+hydratedWorkspace.init([{ id: 'story-db', title: 'Database', chapters: [], subthreads: [] }]);
+hydratedWorkspace.clearLegacyStories();
+assert.equal(hydratedWorkspace.getChapters().length, 0, 'stale local chapters must be discarded');
+assert.equal(hydratedWorkspace.getActiveStory().subthreads.length, 0, 'stale local chats must be discarded');
+assert.equal(removedKeys.includes('ai_story_workspace'), true, 'legacy workspace must be removed after import');
 
 workspace.stories[0].subthreads = [{ id: 'chat-a', title: 'Ý tưởng', messages: [] }];
 workspace.currentStoryId = 'story-a';
 workspace.addSubthreadMessage('chat-a', 'user', 'Nhân vật phản diện là người cố vấn.');
-assert.match(workspace.getIdeationContext(), /Nhân vật phản diện/);
+workspace.addSubthreadMessage('chat-a', 'assistant', 'Bản nháp', 'story-a', {
+    kind: 'chapter-draft',
+    chapterId: 'chapter-chat'
+});
+workspace.replaceSubthreads('story-a', [{
+    id: 'chat-a',
+    title: 'Ý tưởng',
+    messages: [
+        { role: 'user', content: 'Nhân vật phản diện là người cố vấn.' },
+        { role: 'assistant', content: 'Bản nháp' }
+    ]
+}]);
+assert.equal(workspace.getSubthread('chat-a', 'story-a').messages[1].chapterId, 'chapter-chat');
+workspace.replaceChapters('story-a', [], [{
+    chapterId: 'chapter-chat',
+    sourceThreadId: 'chat-a',
+    sourceMessageIndex: 1
+}]);
+assert.equal(workspace.getSubthread('chat-a', 'story-a').messages[1].status, 'DELETED');
+assert.equal(workspace.getSubthread('chat-a', 'story-a').messages[1].chapterDeleted, true);
+assert.match(workspace.getThreadContext('chat-a'), /Bản nháp/);
+workspace.getSubthread('chat-a', 'story-a').messages = Array.from(
+    { length: 25 },
+    (_, index) => ({ role: 'user', content: `message-${index}` })
+);
+assert.doesNotMatch(workspace.getThreadContext('chat-a'), /message-4(?:\n|$)/);
+assert.match(workspace.getThreadContext('chat-a'), /message-24/);
 workspace.replaceSubthreads('story-a', [{ id: 'chat-db', title: 'Đã lưu', messages: [] }]);
 assert.equal(workspace.getSubthread('chat-db', 'story-a').title, 'Đã lưu');
 workspace.currentSubthreadId = 'chat-db';
 assert.equal(workspace.deleteSubthread('chat-db'), true);
-assert.equal(workspace.getIdeationContext(), '');
 workspace.stories[0].chapters = [{ chapterId: 'chapter-title', title: 'Tên cũ' }];
 assert.equal(workspace.renameChapter('chapter-title', 'Tên mới'), true);
 assert.equal(workspace.stories[0].chapters[0].title, 'Tên mới');
@@ -131,10 +204,79 @@ assert.equal(archiveWorkspace.archiveStory('missing-story'), false);
         return { ok: true, json: async () => ({ data: { reply: 'ok' } }) };
     };
     const repository = new context.StoryRepository();
+    await repository.getStories();
+    assert.equal(capturedRequest.url, '/api/v1/ai/stories');
+    assert.equal(capturedRequest.options.headers['X-User-Id'], 'user_web_01');
+
+    await repository.createStory({ title: 'Truyện mới' });
+    assert.equal(capturedRequest.options.method, 'POST');
+    assert.equal(capturedRequest.options.body, '{"title":"Truyện mới"}');
+
+    await repository.updateStory('story-a', { archived: true });
+    assert.equal(capturedRequest.options.method, 'PATCH');
+    assert.equal(capturedRequest.options.body, '{"archived":true}');
+
     await repository.chat('story-a', { message: 'hello' });
     assert.equal(capturedRequest.options.method, 'POST');
     assert.equal(capturedRequest.options.headers['Content-Type'], 'application/json');
     assert.equal(capturedRequest.options.body, '{"message":"hello"}');
+
+    await repository.saveChatThread('story-a', {
+        id: 'chat-a',
+        title: 'Chat',
+        messages: [{ role: 'assistant', content: 'Draft', chapterId: 'local-only' }]
+    });
+    assert.equal(
+        capturedRequest.options.body,
+        '{"title":"Chat","messages":[{"role":"assistant","content":"Draft"}]}'
+    );
+
+    let importedStories;
+    const storyService = new context.StoryService({
+        getStories: async () => ({
+            data: [{
+                id: 'story-db',
+                title: 'Từ database',
+                master_tone: 'Gọn',
+                master_outline: 'Đề cương',
+                chapter_count: 3,
+                chat_count: 2
+            }]
+        }),
+        importLegacyStories: async stories => { importedStories = stories; }
+    });
+    const databaseStories = await storyService.loadStories();
+    assert.equal(databaseStories[0].masterTone, 'Gọn');
+    assert.equal(databaseStories[0].chapterCount, 3);
+    await storyService.importLegacyStories([{
+        id: 'story-old',
+        title: 'Cũ',
+        masterTone: 'Tone cũ',
+        masterOutline: 'Outline cũ'
+    }]);
+    assert.equal(importedStories[0].master_tone, 'Tone cũ');
+    assert.equal('chapters' in importedStories[0], false);
+
+    let generationPayload;
+    const service = new context.StoryService({
+        generateChapter: async (_storyId, payload) => {
+            generationPayload = payload;
+            return { data: { job_id: 'job-a' } };
+        }
+    });
+    service.connectStream = () => {};
+    await service.startGeneration('story-a', {
+        request: 'Viết thành chương hoàn chỉnh.',
+        model: 'gemini-long-context',
+        title: 'Chương 1',
+        wordCount: 1500,
+        tone: 'Tự nhiên',
+        constraints: ['Chat context'],
+        metadata: { thread_id: 'chat-a', message_index: '1' }
+    }, () => {}, () => {}, () => {}, () => {});
+    assert.equal(generationPayload.mode, 'ASYNC');
+    assert.equal(generationPayload.metadata.thread_id, 'chat-a');
+    assert.equal(generationPayload.chapter.target_word_count, 1500);
 
     context.fetch = async () => ({
         ok: false,

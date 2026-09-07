@@ -1,0 +1,2 @@
+[    1006ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/favicon.ico:0
+[  490645ms] [LOG] Connecting EventSource to: /api/v1/ai/jobs/660f7317-5522-462a-9660-2772502e2796/stream @ http://localhost:8000/static/storyService.js?v=3.3.2:136

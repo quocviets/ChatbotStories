@@ -12,16 +12,37 @@ class StoryController {
         this.isEditingMode = false;
         this.chapterSource = '';
         this.archiveVisibleCount = 20;
+        this.chapterGenerationActive = false;
     }
 
-    init() {
+    async init() {
         this.bindDOM();
         this.initTheme();
-        this.workspace.init();
+        try {
+            const legacyStories = this.workspace.readLegacyStories();
+            await this.service.importLegacyStories(legacyStories);
+            let stories = await this.service.loadStories();
+            if (!stories.length) {
+                stories = [await this.service.createStory(
+                    'Truyện 1',
+                    'Thô mộc, đời thực, bộc trực, không dùng từ ngữ sến sẩm AI',
+                    ''
+                )];
+            } else if (!stories.some(story => !story.archivedAt)) {
+                stories[0] = await this.service.setStoryArchived(stories[0].id, false);
+            }
+            this.workspace.init(stories);
+            this.workspace.clearLegacyStories();
+        } catch (error) {
+            console.error('Không thể tải danh sách bộ truyện từ database:', error);
+            alert(`Không thể tải dữ liệu bộ truyện: ${error.message || error}`);
+            return;
+        }
         this.syncWorkspaceUI();
         this.bindEvents();
         this.loadModels();
         this.loadPersistedChats();
+        this.loadPersistedChapters();
         this.updateWordCount();
         this.toggleEditMode(false);
     }
@@ -34,27 +55,24 @@ class StoryController {
             btnCreateStory: get('btn-create-story'), storiesList: get('stories-list'),
             btnStoryArchive: get('btn-story-archive'), storyArchiveDialog: get('story-archive-dialog'),
             storyArchiveList: get('story-archive-list'), btnCloseStoryArchive: get('btn-close-story-archive'),
-            chaptersHistoryList: get('chapters-history-list'), btnCreateChapter: get('btn-create-chapter'),
+            chaptersHistoryList: get('chapters-history-list'),
             btnChapterArchive: get('btn-chapter-archive'), chapterArchiveDialog: get('chapter-archive-dialog'),
             chapterArchiveTitle: get('chapter-archive-title'), chapterArchiveSearch: get('chapter-archive-search'),
             chapterArchiveSort: get('chapter-archive-sort'), chapterArchiveCount: get('chapter-archive-count'),
             chapterArchiveList: get('chapter-archive-list'), btnCloseChapterArchive: get('btn-close-chapter-archive'),
             btnLoadMoreChapters: get('btn-load-more-chapters'), chapterNavigation: get('chapter-navigation'),
+            btnBackToChat: get('btn-back-to-chat'),
             btnPreviousChapter: get('btn-previous-chapter'), btnNextChapter: get('btn-next-chapter'),
-            btnCreateSubthread: get('btn-create-subthread'), chapterConfig: get('chapter-config'),
+            btnCreateSubthread: get('btn-create-subthread'),
             subthreadsList: get('subthreads-list'), newStoryDialog: get('new-story-dialog'),
             newStoryForm: get('new-story-form'), modalStoryTitle: get('modal-story-title'),
             modalMasterTone: get('modal-master-tone'), modalMasterOutline: get('modal-master-outline'),
             btnCloseNewStory: get('btn-close-new-story'), btnCancelNewStory: get('btn-cancel-new-story'),
-            btnStoryMindmap: get('btn-story-mindmap'), mindmapDialog: get('story-mindmap-dialog'),
-            mindmapContent: get('story-mindmap-content'), btnCloseMindmap: get('btn-close-mindmap'),
-            btnLoreFinder: get('btn-lore-finder'), loreDialog: get('lore-finder-dialog'),
+            btnLoreFinder: get('btn-lore-finder'), btnSidebarLoreFinder: get('btn-sidebar-lore-finder'), loreDialog: get('lore-finder-dialog'),
             loreForm: get('lore-search-form'), loreQuery: get('lore-query'), loreResults: get('lore-results'),
             btnSearchLore: get('btn-search-lore'), btnCloseLore: get('btn-close-lore'),
-            form: get('generation-form'), storyId: get('story-id'), modelSelect: get('model-select'),
-            chapterTitle: get('chapter-title'), wordCount: get('word-count'),
-            chapterToneOverride: get('chapter-tone-override'), userPrompt: get('user-prompt'),
-            constraints: get('constraints-list'), btnGenerate: get('btn-generate'),
+            form: get('generation-form'), modelSelect: get('model-select'),
+            userPrompt: get('user-prompt'), btnGenerate: get('btn-generate'),
             activeStoryName: get('active-story-name'),
             activeTitle: get('active-title'), activeModelBadge: get('active-model-badge'),
             chapterStatusBadge: get('chapter-status-badge'), userPromptRow: get('user-prompt-row'),
@@ -105,18 +123,14 @@ class StoryController {
     syncWorkspaceUI() {
         const activeStory = this.workspace.getActiveStory();
         if (!activeStory) return;
-        this.dom.storyId.value = activeStory.id;
         this.dom.activeStoryName.innerText = activeStory.title;
         const mode = this.workspace.getMode();
         const isChat = mode === 'chat';
         const isChapter = mode === 'chapter';
-        this.dom.chapterConfig.classList.toggle('hidden', mode !== 'new-chapter');
         this.dom.chatInputContainer.classList.toggle('hidden', isChapter);
         this.dom.userPromptRow.classList.toggle('hidden', isChapter);
         this.dom.chatScrollFeed.classList.toggle('chapter-reading-mode', isChapter);
         this.dom.chapterStatusBadge.classList.toggle('hidden', !isChapter);
-        const createChapterLabel = this.dom.btnCreateChapter.querySelector('span');
-        if (createChapterLabel) createChapterLabel.textContent = '📖 Tạo Chương Mới';
         if (isChapter) {
             const chapter = activeStory.chapters?.find(item => item.chapterId === this.workspace.currentChapterId);
             this.updateChapterStatus(chapter?.status);
@@ -127,13 +141,14 @@ class StoryController {
             this.dom.userPrompt.placeholder = "Nhập câu hỏi hoặc trao đổi với AI về kịch bản... (Enter để gửi, Shift+Enter để xuống dòng)";
         } else {
             if (this.dom.sendText) this.dom.sendText.innerText = "Gửi yêu cầu";
-            this.dom.userPrompt.placeholder = "Nhập yêu cầu nội dung chương mới... (Enter để gửi, Shift+Enter để xuống dòng)";
+            this.dom.userPrompt.placeholder = "Nhập nội dung trao đổi... (Enter để gửi, Shift+Enter để xuống dòng)";
         }
 
         this.workspace.renderStoriesList(this.dom.storiesList, (id) => {
             this.workspace.selectStory(id);
             this.startNewChapter();
             this.loadPersistedChats(id);
+            this.loadPersistedChapters(id);
         }, (id, title) => this.archiveStory(id, title));
         const archivedStoryCount = this.workspace.getArchivedStories().length;
         this.dom.btnStoryArchive.classList.toggle('hidden', archivedStoryCount === 0);
@@ -150,12 +165,16 @@ class StoryController {
             (chap, title) => this.renameChapter(chap, title),
             chapters.slice(0, this.workspace.recentChapterLimit)
         );
-        this.dom.btnChapterArchive.classList.toggle('hidden', chapters.length <= this.workspace.recentChapterLimit);
-        this.dom.btnChapterArchive.textContent = `Kho chương · ${chapters.length}`;
+        this.dom.btnChapterArchive.classList.toggle('hidden', chapters.length === 0);
+        this.dom.btnChapterArchive.textContent = `📚 Kho chương & Smart Lore (${chapters.length})`;
         this.updateChapterNavigation();
     }
 
     openNewStoryModal() {
+        if (window.authController && !window.authController.isAuthenticated()) {
+            window.authController.openAuthModal('login', { type: 'OPEN_NEW_STORY' }, this.dom.btnCreateStory);
+            return;
+        }
         if (this.dom.newStoryDialog) {
             this.dom.modalStoryTitle.value = `Truyện ${this.workspace.stories.length + 1}`;
             this.dom.modalMasterTone.value = "Thô mộc, đời thực, bộc trực, không dùng từ ngữ sến sẩm AI";
@@ -164,10 +183,23 @@ class StoryController {
         }
     }
 
-    handleCreateNewStorySubmit() {
-        this.workspace.createStory(this.dom.modalStoryTitle.value.trim(), this.dom.modalMasterTone.value.trim(), this.dom.modalMasterOutline.value.trim());
-        this.dom.newStoryDialog.close();
-        this.startNewChapter();
+    async handleCreateNewStorySubmit() {
+        const submitButton = this.dom.newStoryForm.querySelector('[type="submit"]');
+        if (submitButton) submitButton.disabled = true;
+        try {
+            const story = await this.service.createStory(
+                this.dom.modalStoryTitle.value.trim(),
+                this.dom.modalMasterTone.value.trim(),
+                this.dom.modalMasterOutline.value.trim()
+            );
+            this.workspace.createStory(story);
+            this.dom.newStoryDialog.close();
+            this.startNewChapter();
+        } catch (error) {
+            alert(`Không thể tạo bộ truyện: ${error.message || error}`);
+        } finally {
+            if (submitButton) submitButton.disabled = false;
+        }
     }
 
     async createNewSubthread() {
@@ -181,26 +213,38 @@ class StoryController {
             try {
                 await this.service.saveChatThread(this.workspace.currentStoryId, subthread);
             } catch (error) {
-                console.warn(`Chat đã tạo trên máy nhưng chưa lưu được vào database: ${error.message || error}`);
+                this.workspace.deleteSubthread(subthread.id);
+                this.startNewChapter();
+                alert(`Không thể tạo chat trong database: ${error.message || error}`);
+                return null;
             }
         }
+        return subthread;
     }
 
     async loadPersistedChats(storyId = this.workspace.currentStoryId) {
         const story = this.workspace.stories.find(item => item.id === storyId);
         if (!story) return;
-        const localThreads = story.subthreads || [];
         try {
             const persistedThreads = await this.service.loadChats(storyId);
             if (this.workspace.currentStoryId !== storyId) return;
-            if (persistedThreads.length) {
-                this.workspace.replaceSubthreads(storyId, persistedThreads);
-            } else if (localThreads.length) {
-                await Promise.all(localThreads.map(thread => this.service.saveChatThread(storyId, thread)));
-            }
+            this.workspace.replaceSubthreads(storyId, persistedThreads);
             this.syncWorkspaceUI();
         } catch (error) {
             console.error('Không thể đồng bộ chat với database:', error);
+        }
+    }
+
+    async loadPersistedChapters(storyId = this.workspace.currentStoryId) {
+        const story = this.workspace.stories.find(item => item.id === storyId);
+        if (!story) return;
+        try {
+            const { chapters, deletedSources } = await this.service.loadChapters(storyId);
+            if (this.workspace.currentStoryId !== storyId) return;
+            this.workspace.replaceChapters(storyId, chapters, deletedSources);
+            this.syncWorkspaceUI();
+        } catch (error) {
+            console.error('Không thể đồng bộ chương với database:', error);
         }
     }
 
@@ -208,25 +252,31 @@ class StoryController {
         this.workspace.currentSubthreadId = null;
         this.workspace.currentChapterId = null;
         this.workspace.currentVersionId = null;
-        this.dom.activeTitle.innerText = 'Chương mới';
+        this.dom.activeTitle.innerText = 'Chọn phiên chat';
         this.resetNewChapterView();
         this.syncWorkspaceUI();
     }
 
-    archiveStory(storyId, title) {
+    async archiveStory(storyId, title) {
         if (this.workspace.getActiveStories().length <= 1) {
             alert('Cần giữ lại ít nhất một bộ truyện đang hoạt động. Hãy tạo truyện mới trước khi lưu trữ truyện này.');
             return;
         }
         if (!confirm(`Lưu trữ "${title}"? Toàn bộ chương, chat và ký ức vẫn được giữ nguyên.`)) return;
         const wasActive = this.workspace.currentStoryId === storyId;
-        if (!this.workspace.archiveStory(storyId)) return;
-        if (wasActive) {
-            const nextStoryId = this.workspace.currentStoryId;
-            this.startNewChapter();
-            this.loadPersistedChats(nextStoryId);
-        } else {
-            this.syncWorkspaceUI();
+        try {
+            await this.service.setStoryArchived(storyId, true);
+            if (!this.workspace.archiveStory(storyId)) return;
+            if (wasActive) {
+                const nextStoryId = this.workspace.currentStoryId;
+                this.startNewChapter();
+                this.loadPersistedChats(nextStoryId);
+                this.loadPersistedChapters(nextStoryId);
+            } else {
+                this.syncWorkspaceUI();
+            }
+        } catch (error) {
+            alert(`Không thể lưu trữ bộ truyện: ${error.message || error}`);
         }
     }
 
@@ -236,10 +286,15 @@ class StoryController {
     }
 
     renderStoryArchive() {
-        this.workspace.renderArchivedStoriesList(this.dom.storyArchiveList, storyId => {
-            if (!this.workspace.restoreStory(storyId)) return;
-            this.renderStoryArchive();
-            this.syncWorkspaceUI();
+        this.workspace.renderArchivedStoriesList(this.dom.storyArchiveList, async storyId => {
+            try {
+                await this.service.setStoryArchived(storyId, false);
+                if (!this.workspace.restoreStory(storyId)) return;
+                this.renderStoryArchive();
+                this.syncWorkspaceUI();
+            } catch (error) {
+                alert(`Không thể khôi phục bộ truyện: ${error.message || error}`);
+            }
         });
     }
 
@@ -263,6 +318,7 @@ class StoryController {
             await this.service.deleteChapter(this.workspace.currentStoryId, chapter.chapterId);
             const wasActive = this.workspace.currentChapterId === chapter.chapterId;
             this.workspace.deleteChapter(chapter.chapterId);
+            await this.loadPersistedChapters(this.workspace.currentStoryId);
             if (wasActive) this.startNewChapter();
             else this.syncWorkspaceUI();
             if (this.dom.chapterArchiveDialog.open) this.renderChapterArchive();
@@ -313,18 +369,38 @@ class StoryController {
             bubble.className = 'message-bubble';
             StoryController.renderBoldText(bubble, message.content);
             if (message.role === 'assistant') {
-                const exported = this.workspace.getActiveStory()?.chapters?.find(chapter =>
-                    chapter.sourceThreadId === thread.id
-                    && chapter.sourceMessageIndex === messageIndex
+                const chapter = this.workspace.getActiveStory()?.chapters?.find(item =>
+                    item.chapterId === message.chapterId
+                    || (
+                        item.sourceThreadId === thread.id
+                        && Number(item.sourceMessageIndex) === messageIndex
+                    )
                 );
                 const action = document.createElement('button');
                 action.type = 'button';
                 action.className = 'chat-export-chapter';
-                action.disabled = Boolean(exported);
-                action.textContent = exported ? `✓ Đã xuất: ${exported.title}` : '📖 Chốt thành chương';
-                action.addEventListener('click', () =>
-                    this.exportChatMessageAsChapter(thread, message, messageIndex, action)
-                );
+                if (message.kind === 'chapter-draft') {
+                    const status = message.status || chapter?.status;
+                    action.disabled = message.superseded || ['APPROVED', 'PUBLISHED', 'DELETED'].includes(status);
+                    action.textContent = status === 'DELETED'
+                        ? 'Chương liên kết đã bị xóa'
+                        : message.superseded
+                        ? 'Bản cũ đã được thay thế'
+                        : action.disabled
+                            ? `✓ Đã chốt: ${message.title || chapter?.title}`
+                            : '✅ Chốt thành chương';
+                    action.addEventListener('click', () =>
+                        this.handleApproveChatDraft(thread, message, chapter, action)
+                    );
+                } else if (chapter) {
+                    action.disabled = true;
+                    action.textContent = `✓ Đã tạo bản nháp: ${chapter.title}`;
+                } else {
+                    action.textContent = '📖 Viết thành chương';
+                    action.addEventListener('click', () =>
+                        this.handleGenerateChapterFromChat(thread, messageIndex, action)
+                    );
+                }
                 bubble.appendChild(action);
             }
             row.append(avatar, bubble);
@@ -346,28 +422,152 @@ class StoryController {
         this.dom.chatThread.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
 
-    async exportChatMessageAsChapter(thread, message, messageIndex, button) {
+    handleGenerateChapterFromChat(thread, messageIndex, button) {
+        if (this.chapterGenerationActive) return;
         const storyId = this.workspace.currentStoryId;
-        const title = `Chương ${this.workspace.getChapters().length + 1}`;
+        const story = this.workspace.getActiveStory();
+        const context = this.workspace.getThreadContext(thread.id);
+        const streamRow = document.createElement('div');
+        streamRow.className = 'chat-message assistant chat-draft-stream';
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar ai-avatar';
+        avatar.textContent = '✨';
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.textContent = 'Đang chạy pipeline viết chương...';
+        streamRow.append(avatar, bubble);
+        this.dom.chatThread.appendChild(streamRow);
+        streamRow.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+        let streamedContent = '';
+        this.chapterGenerationActive = true;
+        this.currentModel = this.dom.modelSelect.value;
+        button.disabled = true;
+        button.textContent = 'Đang viết chương...';
+        this.dom.btnGenerate.disabled = true;
+        this.dom.progressContainer.classList.remove('hidden');
+        this.service.startGeneration(
+            storyId,
+            {
+                request: 'Viết thành một chương truyện hoàn chỉnh theo phương án vừa chốt trong cuộc trò chuyện.',
+                model: this.currentModel,
+                title: null,
+                wordCount: 1500,
+                tone: story.masterTone || 'Thô mộc, tự nhiên, bộc trực',
+                chapterToneOverride: '',
+                masterTone: story.masterTone || '',
+                masterOutline: story.masterOutline || '',
+                condensedOutline: '',
+                constraints: context
+                    ? [`Các quyết định trong cuộc chat này là ngữ cảnh của chương:\n${context}`]
+                    : [],
+                metadata: {
+                    thread_id: thread.id,
+                    message_index: String(messageIndex)
+                }
+            },
+            state => {
+                if (this.workspace.currentStoryId !== storyId) return;
+                if (state.analysis) return;
+                this.updateStatusView(state);
+                if (!streamedContent) bubble.textContent = this.dom.jobStep.innerText;
+            },
+            token => {
+                if (this.workspace.currentStoryId !== storyId || this.workspace.currentSubthreadId !== thread.id) return;
+                streamedContent += token;
+                StoryController.renderBoldText(bubble, streamedContent);
+                streamRow.scrollIntoView({ block: 'end' });
+            },
+            async result => {
+                if (!this.chapterGenerationActive) return;
+                const content = result.content || streamedContent;
+                const title = result.title || 'Chương mới';
+                const chapter = {
+                    chapterId: result.chapter_id,
+                    versionId: result.version_id,
+                    title,
+                    content,
+                    model: this.currentModel,
+                    status: result.status || 'DRAFT',
+                    sourceThreadId: thread.id,
+                    sourceMessageIndex: messageIndex
+                };
+                this.workspace.saveChapterToCurrentStory(chapter, storyId);
+                this.workspace.addSubthreadMessage(thread.id, 'assistant', content, storyId, {
+                    kind: 'chapter-draft',
+                    chapterId: chapter.chapterId,
+                    versionId: chapter.versionId,
+                    title: chapter.title,
+                    model: chapter.model,
+                    status: chapter.status
+                });
+                try {
+                    await this.service.saveChatThread(storyId, this.workspace.getSubthread(thread.id, storyId));
+                } catch (error) {
+                    console.warn(`Bản nháp đã lưu nhưng chưa đồng bộ được chat: ${error.message || error}`);
+                }
+                this.finishChatChapterGeneration();
+                if (this.workspace.currentStoryId === storyId && this.workspace.currentSubthreadId === thread.id) {
+                    this.renderChatThread(this.workspace.getSubthread(thread.id, storyId));
+                    this.syncWorkspaceUI();
+                }
+            },
+            error => {
+                if (!this.chapterGenerationActive) return;
+                streamRow.remove();
+                this.finishChatChapterGeneration();
+                if (document.contains(button)) {
+                    button.disabled = false;
+                    button.textContent = '📖 Viết thành chương';
+                }
+                alert(`Sự cố sinh chương: ${error.message || error}`);
+            }
+        );
+    }
+
+    finishChatChapterGeneration() {
+        this.chapterGenerationActive = false;
+        this.dom.progressContainer.classList.add('hidden');
+        this.dom.btnGenerate.disabled = false;
+    }
+
+    async handleApproveChatDraft(thread, message, chapter, button) {
+        const storyId = this.workspace.currentStoryId;
+        const chapterId = message.chapterId || chapter?.chapterId;
+        const versionId = message.versionId || chapter?.versionId;
+        if (!chapterId || !versionId) return;
+        const currentTitle = message.title || chapter?.title || 'Chương';
+        const requestedTitle = prompt('Tên chương:', currentTitle);
+        if (requestedTitle === null) return;
+        const title = requestedTitle.trim() || currentTitle;
         try {
             button.disabled = true;
-            button.textContent = 'Đang xuất...';
-            const chapter = await this.service.exportChatChapter(storyId, {
+            button.textContent = 'Đang chốt...';
+            if (title !== currentTitle) await this.service.renameChapter(storyId, chapterId, title);
+            await this.service.approveChapter(storyId, chapterId, versionId);
+            Object.assign(message, { title, status: 'APPROVED' });
+            this.workspace.saveChapterToCurrentStory({
+                ...chapter,
+                chapterId,
+                versionId,
                 title,
                 content: message.content,
-                model: this.dom.modelSelect.value,
-                thread_id: thread.id,
-                message_index: messageIndex
-            });
-            this.workspace.saveChapterToCurrentStory(chapter, storyId);
+                status: 'APPROVED',
+                sourceThreadId: thread.id
+            }, storyId);
+            try {
+                await this.service.saveChatThread(storyId, thread);
+            } catch (error) {
+                console.warn(`Chương đã chốt nhưng chưa đồng bộ được chat: ${error.message || error}`);
+            }
             if (this.workspace.currentStoryId === storyId) {
+                this.renderChatThread(thread);
                 this.syncWorkspaceUI();
-                this.renderChatThread(this.workspace.getSubthread(thread.id, storyId));
             }
         } catch (error) {
-            alert(`Không thể xuất câu trả lời thành chương: ${error.message || error}`);
             button.disabled = false;
-            button.textContent = '📖 Chốt thành chương';
+            button.textContent = '✅ Chốt thành chương';
+            alert(`Không thể chốt chương: ${error.message || error}`);
         }
     }
 
@@ -405,16 +605,64 @@ class StoryController {
         return String(text || '').split(/(\*\*[^*\n]+\*\*)/g).filter(Boolean);
     }
 
+    static parseInlineFormatting(text) {
+        const source = String(text || '');
+        const tokens = [];
+        const pattern = /\*\*\*([^*\n]+)\*\*\*|\*\*([^*\n]+)\*\*|\*([^*\n]+)\*/g;
+        let cursor = 0;
+        let match;
+        while ((match = pattern.exec(source)) !== null) {
+            if (match.index > cursor) {
+                tokens.push({ type: 'text', text: source.slice(cursor, match.index) });
+            }
+            tokens.push({
+                type: match[1] !== undefined
+                    ? 'strong-em'
+                    : match[2] !== undefined
+                        ? 'strong'
+                        : 'em',
+                text: match[1] ?? match[2] ?? match[3]
+            });
+            cursor = pattern.lastIndex;
+        }
+        if (cursor < source.length) {
+            tokens.push({ type: 'text', text: source.slice(cursor) });
+        }
+        return tokens;
+    }
+
+    static appendInlineFormatting(parent, text) {
+        StoryController.parseInlineFormatting(text).forEach(token => {
+            if (token.type === 'text') {
+                parent.appendChild(document.createTextNode(token.text));
+                return;
+            }
+            const emphasis = document.createElement('em');
+            emphasis.textContent = token.text;
+            if (token.type === 'em') {
+                parent.appendChild(emphasis);
+                return;
+            }
+            const strong = document.createElement('strong');
+            if (token.type === 'strong-em') strong.appendChild(emphasis);
+            else strong.textContent = token.text;
+            parent.appendChild(strong);
+        });
+    }
+
     static renderBoldText(element, text) {
         const fragment = document.createDocumentFragment();
-        StoryController.splitBoldText(text).forEach(part => {
-            if (part.startsWith('**') && part.endsWith('**')) {
+        String(text || '').split('\n').forEach((line, index, lines) => {
+            const heading = line.match(/^(#{1,3})\s+(.+)$/);
+            if (heading) {
                 const strong = document.createElement('strong');
-                strong.textContent = part.slice(2, -2);
+                strong.className = `markdown-heading markdown-heading-${heading[1].length}`;
+                StoryController.appendInlineFormatting(strong, heading[2]);
                 fragment.appendChild(strong);
             } else {
-                fragment.appendChild(document.createTextNode(part));
+                StoryController.appendInlineFormatting(fragment, line);
             }
+            if (index < lines.length - 1) fragment.appendChild(document.createTextNode('\n'));
         });
         element.replaceChildren(fragment);
     }
@@ -442,8 +690,19 @@ class StoryController {
         const chapterId = this.workspace.currentChapterId;
         this.dom.chapterNavigation.classList.toggle('hidden', !chapterId);
         if (!chapterId) return;
+        const chapter = this.workspace.getChapters().find(item => item.chapterId === chapterId);
+        const hasSourceChat = chapter?.sourceThreadId
+            && this.workspace.getSubthread(chapter.sourceThreadId);
+        this.dom.btnBackToChat.classList.toggle('hidden', !hasSourceChat);
         this.dom.btnPreviousChapter.disabled = !this.workspace.getAdjacentChapter(chapterId, -1);
         this.dom.btnNextChapter.disabled = !this.workspace.getAdjacentChapter(chapterId, 1);
+    }
+
+    openSourceChat() {
+        const chapter = this.workspace.getChapters().find(item => item.chapterId === this.workspace.currentChapterId);
+        if (!chapter?.sourceThreadId || !this.workspace.selectSubthread(chapter.sourceThreadId)) return;
+        this.showActiveChat();
+        this.syncWorkspaceUI();
     }
 
     loadAdjacentChapter(offset) {
@@ -483,13 +742,6 @@ class StoryController {
         this.dom.btnLoadMoreChapters.classList.toggle('hidden', chapters.length <= this.archiveVisibleCount);
     }
 
-    openStoryMindmap() {
-        const story = this.workspace.getActiveStory();
-        if (!story) return;
-        StoryExplorer.renderMindmap(this.dom.mindmapContent, story, chap => { this.loadChapterIntoView(chap); this.dom.mindmapDialog.close(); });
-        this.dom.mindmapDialog.showModal();
-    }
-
     openLoreFinder() {
         this.dom.loreDialog.showModal();
         this.dom.loreQuery.focus();
@@ -517,7 +769,6 @@ class StoryController {
         if (this.dom.btnCloseNewStory) this.dom.btnCloseNewStory.addEventListener('click', () => this.dom.newStoryDialog.close());
         if (this.dom.btnCancelNewStory) this.dom.btnCancelNewStory.addEventListener('click', () => this.dom.newStoryDialog.close());
         if (this.dom.btnCreateSubthread) this.dom.btnCreateSubthread.addEventListener('click', () => this.createNewSubthread());
-        if (this.dom.btnCreateChapter) this.dom.btnCreateChapter.addEventListener('click', () => this.startNewChapter());
         this.dom.btnChapterArchive.addEventListener('click', () => this.openChapterArchive());
         this.dom.btnCloseChapterArchive.addEventListener('click', () => this.dom.chapterArchiveDialog.close());
         this.dom.chapterArchiveSearch.addEventListener('input', () => { this.archiveVisibleCount = 20; this.renderChapterArchive(); });
@@ -525,10 +776,10 @@ class StoryController {
         this.dom.btnLoadMoreChapters.addEventListener('click', () => { this.archiveVisibleCount += 20; this.renderChapterArchive(); });
         this.dom.btnPreviousChapter.addEventListener('click', () => this.loadAdjacentChapter(-1));
         this.dom.btnNextChapter.addEventListener('click', () => this.loadAdjacentChapter(1));
+        this.dom.btnBackToChat.addEventListener('click', () => this.openSourceChat());
 
-        this.dom.btnStoryMindmap.addEventListener('click', () => this.openStoryMindmap());
-        this.dom.btnCloseMindmap.addEventListener('click', () => this.dom.mindmapDialog.close());
-        this.dom.btnLoreFinder.addEventListener('click', () => this.openLoreFinder());
+        if (this.dom.btnLoreFinder) this.dom.btnLoreFinder.addEventListener('click', () => this.openLoreFinder());
+        if (this.dom.btnSidebarLoreFinder) this.dom.btnSidebarLoreFinder.addEventListener('click', () => this.openLoreFinder());
         this.dom.btnCloseLore.addEventListener('click', () => this.dom.loreDialog.close());
         this.dom.loreForm.addEventListener('submit', (e) => { e.preventDefault(); this.handleLoreSearch(); });
 
@@ -558,8 +809,8 @@ class StoryController {
             this.dom.btnExport.addEventListener('click', (e) => { e.stopPropagation(); this.dom.exportMenu.classList.toggle('hidden'); });
             document.addEventListener('click', () => this.dom.exportMenu.classList.add('hidden'));
         }
-        if (this.dom.exportTxt) this.dom.exportTxt.addEventListener('click', () => StoryExporter.exportTxt(this.dom.streamOutput.innerText, this.dom.activeTitle.innerText));
-        if (this.dom.exportDoc) this.dom.exportDoc.addEventListener('click', () => StoryExporter.exportDoc(this.dom.streamOutput.innerText, this.dom.activeTitle.innerText));
+        if (this.dom.exportTxt) this.dom.exportTxt.addEventListener('click', () => StoryExporter.exportTxt(this.chapterSource, this.dom.activeTitle.innerText));
+        if (this.dom.exportDoc) this.dom.exportDoc.addEventListener('click', () => StoryExporter.exportDoc(this.chapterSource, this.dom.activeTitle.innerText));
         if (this.dom.exportPdf) this.dom.exportPdf.addEventListener('click', () => StoryExporter.exportPdf(this.dom.streamOutput.innerText));
 
         this.dom.btnApprove.addEventListener('click', () => this.handleApprove());
@@ -567,12 +818,32 @@ class StoryController {
         if (this.dom.btnCancelJob) this.dom.btnCancelJob.addEventListener('click', () => this.handleCancelJob());
         if (this.dom.btnAnalyze) this.dom.btnAnalyze.addEventListener('click', () => this.handleAnalyze());
         if (this.dom.btnContinue) this.dom.btnContinue.addEventListener('click', () => this.handleContinue());
+
+        window.addEventListener('ai-story-auth-changed', (e) => {
+            const { user, action } = e.detail || {};
+            if (user && action) {
+                if (action.type === 'OPEN_NEW_STORY') {
+                    this.openNewStoryModal();
+                } else if (action.type === 'SUBMIT_PROMPT') {
+                    if (this.dom.userPrompt && action.prompt) {
+                        this.dom.userPrompt.value = action.prompt;
+                    }
+                    this.handleStartGeneration();
+                }
+            }
+        });
     }
 
     updateWordCount() {
         const text = this.dom.streamOutput.innerText || '';
         const words = text.trim() ? text.trim().split(/\s+/).length : 0;
         this.dom.liveWordCount.innerText = `📊 ${words} từ | ${text.length} ký tự`;
+    }
+
+    setExportEnabled(enabled) {
+        if (!this.dom.btnExport) return;
+        this.dom.btnExport.disabled = !enabled;
+        if (!enabled) this.dom.exportMenu.classList.add('hidden');
     }
 
     toggleEditMode(forceState = null) {
@@ -641,8 +912,7 @@ class StoryController {
         } catch (error) { this.dom.modelSelect.innerHTML = '<option value="">Lỗi tải mô hình</option>'; }
     }
 
-    handleStartGeneration() {
-        const storyId = this.workspace.currentStoryId;
+    async handleStartGeneration() {
         const promptText = this.dom.userPrompt.value.trim();
         if (promptText.length < 5) {
             this.dom.userPrompt.setCustomValidity('Yêu cầu cần ít nhất 5 ký tự.');
@@ -650,54 +920,12 @@ class StoryController {
             this.dom.userPrompt.setCustomValidity('');
             return;
         }
-        if (this.workspace.currentSubthreadId) {
-            this.handleChatMessage(promptText);
+        if (window.authController && !window.authController.isAuthenticated()) {
+            window.authController.openAuthModal('login', { type: 'SUBMIT_PROMPT', prompt: promptText }, this.dom.btnGenerate);
             return;
         }
-        const titleText = this.dom.chapterTitle.value.trim() || 'Chương không tiêu đề';
-        const activeStory = this.workspace.getActiveStory() || {};
-        const ideationContext = this.workspace.getIdeationContext();
-
-        const formValues = {
-            request: promptText, model: this.dom.modelSelect.value, title: titleText,
-            wordCount: this.dom.wordCount.value, tone: activeStory.masterTone || 'Thô mộc, tự nhiên, bộc trực',
-            chapterToneOverride: this.dom.chapterToneOverride ? this.dom.chapterToneOverride.value.trim() : '',
-            masterTone: activeStory.masterTone || '', masterOutline: activeStory.masterOutline || '',
-            constraints: [
-                ...(this.dom.constraints ? this.dom.constraints.value.split('\n').map(c => c.trim()).filter(Boolean) : []),
-                ...(ideationContext ? [`Thông tin từ các phiên chat phát triển ý tưởng:\n${ideationContext}`] : [])
-            ]
-        };
-
-        this.currentModel = formValues.model;
-        this.dom.activeTitle.innerText = titleText;
-        this.dom.activeModelBadge.innerText = formValues.model;
-
-        this.dom.welcomeContainer.classList.add('hidden');
-        this.dom.feedThread.classList.remove('hidden');
-        this.dom.userPromptDisplay.innerText = promptText;
-        this.setChapterContent('', false);
-        this.updateWordCount();
-
-        this.dom.progressContainer.classList.remove('hidden');
-        this.dom.progressFill.style.width = '0%';
-        this.dom.jobStep.innerText = 'Đang chuẩn bị...';
-        this.dom.actionPanel.classList.add('hidden');
-        this.dom.analysisResults.classList.add('hidden');
-        this.dom.analysisIdle.classList.remove('hidden');
-        this.dom.qualityScore.classList.add('hidden');
-        this.dom.memoryResults.classList.add('hidden');
-        this.dom.memoryIdle.classList.remove('hidden');
-
-        this.dom.btnGenerate.disabled = true;
-        this.service.startGeneration(
-            storyId,
-            formValues,
-            (s) => { if (this.workspace.currentStoryId === storyId) this.updateStatusView(s); },
-            (t) => { if (this.workspace.currentStoryId === storyId) this.appendTokenView(t); },
-            (r) => this.handleGenerationComplete(r, storyId, titleText),
-            (e) => this.handleGenerationError(e)
-        );
+        if (!this.workspace.currentSubthreadId && !await this.createNewSubthread()) return;
+        await this.handleChatMessage(promptText);
     }
 
     async handleChatMessage(message) {
@@ -706,7 +934,17 @@ class StoryController {
         const story = this.workspace.getActiveStory();
         const thread = this.workspace.getSubthread(threadId, storyId);
         if (!thread) return;
-        const history = thread.messages.slice(-20);
+        const activeDraft = thread.messages[thread.messages.length - 1];
+        if (
+            activeDraft?.role === 'assistant'
+            && activeDraft.kind === 'chapter-draft'
+            && !activeDraft.superseded
+            && !['APPROVED', 'PUBLISHED'].includes(activeDraft.status)
+        ) {
+            await this.handleDraftFeedback(thread, activeDraft, message);
+            return;
+        }
+        const history = thread.messages.slice(-20).map(({ role, content }) => ({ role, content }));
         this.workspace.addSubthreadMessage(threadId, 'user', message, storyId);
         this.dom.userPrompt.value = '';
         this.dom.userPrompt.style.height = '';
@@ -739,6 +977,61 @@ class StoryController {
         }
     }
 
+    async handleDraftFeedback(thread, draft, feedback) {
+        const storyId = this.workspace.currentStoryId;
+        const threadId = thread.id;
+        this.workspace.addSubthreadMessage(threadId, 'user', feedback, storyId);
+        this.dom.userPrompt.value = '';
+        this.dom.userPrompt.style.height = '';
+        this.dom.userPrompt.style.overflowY = 'hidden';
+        this.renderChatThread(thread, true);
+        this.dom.btnGenerate.disabled = true;
+        this.dom.sendText.innerText = 'Đang sửa bản nháp...';
+        try {
+            const result = await this.service.regenerateChapter(
+                storyId,
+                draft.chapterId,
+                draft.versionId,
+                feedback,
+                draft.model || this.dom.modelSelect.value
+            );
+            draft.superseded = true;
+            const chapter = this.workspace.getChapters().find(item => item.chapterId === draft.chapterId);
+            const revised = {
+                chapterId: result.chapter_id || draft.chapterId,
+                versionId: result.version_id,
+                title: draft.title || chapter?.title,
+                content: result.content,
+                model: draft.model || chapter?.model,
+                status: result.status || 'DRAFT',
+                sourceThreadId: threadId,
+                sourceMessageIndex: chapter?.sourceMessageIndex
+            };
+            this.workspace.saveChapterToCurrentStory(revised, storyId);
+            this.workspace.addSubthreadMessage(threadId, 'assistant', revised.content, storyId, {
+                kind: 'chapter-draft',
+                chapterId: revised.chapterId,
+                versionId: revised.versionId,
+                title: revised.title,
+                model: revised.model,
+                status: revised.status
+            });
+            await this.service.saveChatThread(storyId, thread);
+            if (this.workspace.currentStoryId === storyId && this.workspace.currentSubthreadId === threadId) {
+                this.renderChatThread(thread);
+                this.syncWorkspaceUI();
+            }
+        } catch (error) {
+            if (this.workspace.currentStoryId === storyId && this.workspace.currentSubthreadId === threadId) {
+                this.renderChatThread(thread);
+            }
+            alert(`Không thể sửa bản nháp: ${error.message || error}`);
+        } finally {
+            this.dom.btnGenerate.disabled = false;
+            if (this.workspace.currentSubthreadId) this.dom.sendText.innerText = 'Gửi tin nhắn';
+        }
+    }
+
     appendTokenView(token) {
         this.chapterSource += token;
         this.dom.streamOutput.innerText = this.chapterSource;
@@ -747,22 +1040,25 @@ class StoryController {
 
     updateStatusView(jobState) {
         const stepLabels = { 'PLANNING': 'Lập kế hoạch...', 'RETRIEVING': 'Truy vấn ký ức...', 'BUILDING_PROMPT': 'Dựng prompt...', 'GENERATING': 'Đang sinh nội dung...', 'ANALYZING': 'Phân tích chất lượng...' };
-        this.dom.jobStep.innerText = stepLabels[jobState.current_step] || jobState.status;
+        const step = jobState.current_step || jobState.step;
+        this.dom.jobStep.innerText = stepLabels[step] || jobState.status;
         this.dom.progressFill.style.width = `${jobState.progress}%`;
     }
 
     handleGenerationComplete(result, storyId, title) {
         const content = result.content ?? this.dom.streamOutput.innerText;
+        const resolvedTitle = result.title || title || 'Chương mới';
         this.workspace.saveChapterToCurrentStory({
             chapterId: result.chapter_id,
             versionId: result.version_id,
-            title,
+            title: resolvedTitle,
             content,
             model: this.currentModel,
             status: result.status || 'DRAFT'
         }, storyId);
         this.dom.progressContainer.classList.add('hidden');
         this.dom.btnGenerate.disabled = false;
+        this.setExportEnabled(true);
         if (this.workspace.currentStoryId !== storyId) return;
 
         this.workspace.currentChapterId = result.chapter_id;
@@ -777,6 +1073,7 @@ class StoryController {
     handleGenerationError(error) {
         this.dom.progressContainer.classList.add('hidden');
         this.dom.btnGenerate.disabled = false;
+        this.setExportEnabled(true);
         alert(`Sự cố sinh chương: ${error.message || error}`);
     }
 
@@ -813,6 +1110,7 @@ class StoryController {
         this.dom.progressFill.style.width = '0%';
         this.dom.jobStep.innerText = 'Đang chuẩn bị tái tạo...';
         this.dom.actionPanel.classList.add('hidden');
+        this.setExportEnabled(false);
 
         try {
             const result = await this.service.regenerateChapter(storyId, this.workspace.currentChapterId, this.workspace.currentVersionId, feedback, this.currentModel);
@@ -830,6 +1128,7 @@ class StoryController {
         this.dom.progressFill.style.width = '0%';
         this.dom.jobStep.innerText = 'Đang chuẩn bị viết tiếp...';
         this.dom.actionPanel.classList.add('hidden');
+        this.setExportEnabled(false);
 
         try {
             const result = await this.service.continueChapter(storyId, this.workspace.currentChapterId, feedback, this.currentModel || this.dom.modelSelect.value);
@@ -852,7 +1151,13 @@ class StoryController {
 
     async handleCancelJob() {
         if (this.service.currentJobId) {
-            try { await this.service.cancelJob(this.service.currentJobId); alert("Đã gửi yêu cầu hủy."); }
+            try {
+                await this.service.cancelJob(this.service.currentJobId);
+                this.dom.progressContainer.classList.add('hidden');
+                this.dom.btnGenerate.disabled = false;
+                this.setExportEnabled(true);
+                alert("Đã gửi yêu cầu hủy.");
+            }
             catch (e) { alert(`Lỗi: ${e.message}`); }
         }
     }
